@@ -122,10 +122,22 @@ def api_upload_auth():
             destino = os.path.join(DATA_DIR, "headers_auth.json")
             headers_text = contenido
 
-            # Si es un comando cURL copiado, extraer todas las cabeceras -H '...' o --header "..."
-            if "curl " in contenido[:50] or contenido.startswith("curl"):
-                limpio = contenido.replace('^"', '"')
-                h_matches = re.findall(r"(?:-H|--header)\s+['\"]([^'\"]+)['\"]", limpio)
+            # Si es un comando cURL copiado, extraer cabeceras y cookies (-b / --cookie)
+            if "curl " in contenido[:80] or contenido.startswith("curl") or "-H " in contenido:
+                limpio = contenido.replace('^"', '"').replace('^', '')
+                h_matches = []
+                for m in re.finditer(r"(?:-H|--header)\s+\$?(?:'([^']*)'|\"([^\"]*)\")", limpio):
+                    val = m.group(1) if m.group(1) is not None else m.group(2)
+                    if val:
+                        h_matches.append(val)
+
+                # Extraer cookies que Chrome/Edge/Firefox suelen poner en -b o --cookie
+                c_match = re.search(r"(?:-b|--cookie)\s+\$?(?:'([^']*)'|\"([^\"]*)\"|(\S+))", limpio)
+                if c_match:
+                    c_val = c_match.group(1) or c_match.group(2) or c_match.group(3)
+                    if c_val:
+                        h_matches.append(f"cookie: {c_val}")
+
                 if h_matches:
                     headers_text = "\n".join(h_matches)
 
