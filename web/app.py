@@ -49,11 +49,18 @@ def index():
     if auth_file:
         auth_ok, auth_msg = verificar_autenticacion_ytm(auth_file)
 
+    env_client_id = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+    env_client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
+    has_env_oauth = bool(env_client_id and env_client_secret)
+
     return render_template(
         "index.html",
         auth_ok=auth_ok,
         auth_msg=auth_msg,
         auth_file_name=os.path.basename(auth_file) if auth_file else None,
+        has_env_oauth=has_env_oauth,
+        default_client_id=env_client_id,
+        default_client_secret=env_client_secret,
     )
 
 
@@ -115,8 +122,8 @@ OAUTH_FLOWS = {}
 def api_oauth_init():
     """Inicia el flujo OAuth para YouTube Music con Google Device Flow."""
     data = request.get_json() or {}
-    client_id = data.get("client_id", "").strip()
-    client_secret = data.get("client_secret", "").strip()
+    client_id = data.get("client_id", "").strip() or os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+    client_secret = data.get("client_secret", "").strip() or os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
 
     if not client_id or not client_secret:
         return jsonify({
