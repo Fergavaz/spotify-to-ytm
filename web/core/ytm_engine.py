@@ -1,0 +1,249 @@
+"""
+Motor de interacción con YouTube Music (ytmusicapi).
+Maneja autenticación, búsqueda multietapa con fallback, sincronización y chunking.
+"""
+
+import os
+import re
+import time
+from typing import Callable, Optional
+from ytmusicapi import YTMusic
+from core.normalizer import clave, coincide, normalizar
+
+MAX_CANCIONES_LISTA_YTM = 5000
+LOTE_API = 50
+PAUSA_BUSQUEDA = 0.25
+
+
+def encontrar_archivo_auth(directorio_base: str) -> Optional[str]:
+    """
+    Busca un archivo de autenticación válido en el directorio base o en la ruta global.
+    Prioridad: variable de entorno YTM_AUTH_FILE, headers_auth.json, browser.json, oauth.json.
+    """
+    env_auth = os.environ.get("YTM_AUTH_FILE")
+    if env_auth and os.path.exists(env_auth) and os.path.getsize(env_auth) > 20:
+        return env_auth
+
+    nombres = ["headers_auth.json", "browser.json", "oauth.json"]
+    for nombre in nombres:
+        ruta = os.path.join(directorio_base, nombre)
+        if os.path.exists(ruta) and os.path.getsize(ruta) > 20:
+            return ruta
+        # También comprobar en subcarpeta data o en el directorio padre por conveniencia
+        ruta_data = os.path.join(directorio_base, "data", nombre)
+        if os.path.exists(ruta_data) and os.path.getsize(ruta_data) > 20:
+            return ruta_data
+        ruta_padre = os.path.join(os.path.dirname(directorio_base), nombre)
+        if os.path.exists(ruta_padre) and os.path.getsize(ruta_padre) > 20:
+            return ruta_padre
+    return None
+
+
+def obtener_cliente_ytm(ruta_auth: str) -> YTMusic:
+    """Instancia y devuelve el cliente de YTMusic."""
+    if not os.path.exists(ruta_auth):
+        raise FileNotFoundError(f"No existe el archivo de autenticación: {ruta_auth}")
+    return YTMusic(ruta_auth)
+
+
+def verificar_autenticacion_ytm(ruta_auth: str) -> tuple[bool, str]:
+    """
+    Verifica si las credenciales de YouTube Music son válidas realizando una llamada ligera.
+    """
+    try:
+        yt = YTMusic(ruta_auth)
+        # Intentar obtener las playlists de biblioteca (requiere autenticación)
+        pl = yt.get_library_playlists(limit=1)
+        return True, "Conectado correctamente a YouTube Music."
+    except Exception as e:
+        return False, f"Error de autenticación en YouTube Music: {str(e)}"
+
+
+def en_lotes(lista: list, tam: int = LOTE_API):
+    """Divide una lista en lotes de tamaño especificado."""
+    for i in range(0, len(lista), tam):
+        yield lista[i:i + tam]
+
+
+def buscar_listas_ytm(yt: YTMusic, nombre_base: str) -> list[dict]:
+    """
+    Busca en YTM todas las listas que coincidan con el nombre base:
+    'MiLista', 'MiLista 2', 'MiLista 3'...
+    """
+    todas = yt.get_library_playlists(limit=None)
+    patron = re.compile(rf"^{re.escape(nombre_base)}(\s+\d+)?$")
+    encontradas = []
+    for pl in todas:
+        if patron.match(pl["title"]):
+            encontradas.append(pl)
+
+    def orden(p):
+        m = re.search(r"\s+(\d+)$", p["title"])
+        return int(m.group(1)) if m else 0
+
+    encontradas.sort(key=orden)
+    return encontradas
+
+
+def obtener_canciones_ytm(yt: YTMusic, playlists: list[dict], log_cb: Optional[Callable[[str], None]] = None) -> list[dict]:
+    """Obtiene todas las canciones existentes en las playlists de YTM indicadas."""
+    canciones = []
+    for pl in playlists:
+        if log_cb:
+            log_cb(f"Leyendo playlist existente en YTM: '{pl['title']}'...")
+        datos = yt.get_playlist(pl["playlistId"], limit=None)
+        for t in datos.get("tracks", []):
+            canciones.append({
+                "id": t.get("videoId"),
+                "titulo": t.get("title", ""),
+                "artistas": [a["name"] for a in (t.get("artists") or []) if isinstance(a, dict)],
+            })
+    return canciones
+
+
+def buscar_en_ytm(yt: YTMusic, cancion: dict) -> Optional[str]:
+    """
+    Busca una canción en YouTube Music y devuelve su videoId.
+    Aplica búsqueda multietapa con consultas flexibles y fallback a vídeos oficiales.
+    """
+    artista = cancion["artistas"][0] if cancion["artistas"] else ""
+    k = clave(cancion["titulo"], cancion["artistas"])
+    tit_original = cancion["titulo"]
+
+    consultas = [
+        f"{tit_original} {artista}".strip(),
+    ]
+    sin_signos = re.sub(r"[¿?¡!]+", " ", tit_original).strip()
+    if sin_signos != tit_original:
+        consultas.append(f"{sin_signos} {artista}".strip())
+
+    base_tit = normalizar(tit_original)
+    if base_tit and base_tit.lower() != tit_original.lower():
+        consultas.append(f"{base_tit} {artista}".strip())
+
+    consultas = list(dict.fromkeys(c for c in consultas if c))
+
+    # Fase 1: Canciones oficiales (filter="songs")
+    for query in consultas:
+        try:
+            resultados = yt.search(query, filter="songs", limit=6)
+            for r in resultados:
+                artistas_r = [a["name"] for a in r.get("artists", []) if isinstance(a, dict)]
+                if coincide(k, clave(r["title"], artistas_r), raw_a=tit_original, raw_b=r["title"]):
+                    return r["videoId"]
+        except Exception:
+            pass
+
+    # Fase 2: Videoclips oficiales (filter="videos")
+    for query in consultas:
+        try:
+            resultados = yt.search(query, filter="videos", limit=6)
+            for r in resultados:
+                artistas_r = [a["name"] for a in r.get("artists", []) if isinstance(a, dict)]
+                if coincide(k, clave(r["title"], artistas_r), raw_a=tit_original, raw_b=r["title"]):
+                    return r["videoId"]
+        except Exception:
+            pass
+
+    return None
+
+
+def diferencia_canciones(origen: list[dict], destino: list[dict]) -> list[dict]:
+    """Devuelve las canciones de 'origen' que no existen en 'destino'."""
+    claves_destino = [clave(t["titulo"], t["artistas"]) for t in destino]
+    faltan = []
+    for t in origen:
+        k = clave(t["titulo"], t["artistas"])
+        if not any(coincide(k, c) for c in claves_destino):
+            faltan.append(t)
+    return faltan
+
+
+def calcular_nombre_lista(nombre_base: str, indice: int) -> str:
+    """Genera el nombre de lista: 'MiLista', 'MiLista 2', 'MiLista 3'..."""
+    if indice <= 1:
+        return nombre_base
+    return f"{nombre_base} {indice}"
+
+
+def obtener_capacidad_listas(yt: YTMusic, listas_existentes: list[dict]) -> list[dict]:
+    """Devuelve las listas con su capacidad disponible (hasta 5000 canciones)."""
+    info = []
+    for pl in listas_existentes:
+        datos = yt.get_playlist(pl["playlistId"], limit=None)
+        total = len(datos.get("tracks", []))
+        info.append({
+            "playlistId": pl["playlistId"],
+            "title": pl["title"],
+            "total_actual": total,
+            "espacio_libre": max(0, MAX_CANCIONES_LISTA_YTM - total),
+        })
+    return info
+
+
+def anadir_canciones_ytm(
+    yt: YTMusic,
+    nombre_base: str,
+    video_ids: list[str],
+    listas_existentes: list[dict],
+    log_cb: Optional[Callable[[str], None]] = None,
+) -> list[str]:
+    """
+    Añade los video_ids a las listas de YTM.
+    Llena listas existentes hasta el límite de 5000 y crea nuevas si es necesario.
+    Devuelve la lista de nombres de playlists creadas o actualizadas.
+    """
+    if not video_ids:
+        return []
+
+    info_listas = obtener_capacidad_listas(yt, listas_existentes) if listas_existentes else []
+    ids_pendientes = list(video_ids)
+    listas_modificadas = []
+
+    # 1. Rellenar listas existentes con espacio libre
+    for lista in info_listas:
+        if not ids_pendientes:
+            break
+        if lista["espacio_libre"] > 0:
+            lote_total = ids_pendientes[:lista["espacio_libre"]]
+            ids_pendientes = ids_pendientes[lista["espacio_libre"]:]
+            if log_cb:
+                log_cb(f"Añadiendo {len(lote_total)} canciones a la lista existente '{lista['title']}'...")
+            for lote in en_lotes(lote_total):
+                yt.add_playlist_items(lista["playlistId"], videoIds=lote, duplicates=True)
+                time.sleep(PAUSA_BUSQUEDA)
+            listas_modificadas.append(lista["title"])
+
+    # 2. Si quedan canciones, crear nuevas listas numeradas
+    if ids_pendientes:
+        if listas_existentes:
+            numeros = []
+            for pl in listas_existentes:
+                m = re.search(r"\s+(\d+)$", pl["title"])
+                numeros.append(int(m.group(1)) if m else 1)
+            siguiente = max(numeros) + 1
+        else:
+            siguiente = 1
+
+        while ids_pendientes:
+            nombre_nueva = calcular_nombre_lista(nombre_base, siguiente)
+            lote_total = ids_pendientes[:MAX_CANCIONES_LISTA_YTM]
+            ids_pendientes = ids_pendientes[MAX_CANCIONES_LISTA_YTM:]
+
+            if log_cb:
+                log_cb(f"Creando nueva lista '{nombre_nueva}' con {len(lote_total)} canciones...")
+
+            primer_lote = lote_total[:LOTE_API]
+            pl_id = yt.create_playlist(
+                title=nombre_nueva,
+                description=f"Transferida desde Spotify — {nombre_base}",
+                video_ids=primer_lote,
+            )
+            for lote in en_lotes(lote_total[LOTE_API:]):
+                yt.add_playlist_items(pl_id, videoIds=lote, duplicates=True)
+                time.sleep(PAUSA_BUSQUEDA)
+
+            listas_modificadas.append(nombre_nueva)
+            siguiente += 1
+
+    return listas_modificadas

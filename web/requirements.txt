@@ -1,0 +1,6 @@
+flask>=3.0.0
+spotipy>=2.24.0
+ytmusicapi>=1.8.0
+spotifyscraper>=0.1.0
+cryptography>=42.0.0
+gunicorn>=21.2.0

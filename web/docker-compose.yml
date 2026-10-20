@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  spotify-to-ytm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spotify-to-ytm-web
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - SECRET_KEY=cambia_esta_clave_en_produccion_2026
+      - DATA_DIR=/app/data
+    volumes:
+      # Persistencia de autenticación (headers_auth.json / browser.json)
+      - ./data:/app/data
+      # Persistencia de informes descargables en CSV
+      - ./reports:/app/reports
+      # Archivos CSV temporales subidos
+      - ./uploads:/app/uploads
+      # Si ya tienes headers_auth.json en la misma carpeta, puedes mapearlo directamente:
+      # - ./headers_auth.json:/app/data/headers_auth.json:ro

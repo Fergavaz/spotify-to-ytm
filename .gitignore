@@ -3,16 +3,29 @@ spotify_config.enc
 .cache
 oauth.json
 headers_auth.json
+browser.json
+**/data/*.json
+!**/data/.gitkeep
 
 # Entornos virtuales y caché de Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 .venv/
 venv/
 ENV/
+.env
 
-# Informes CSV generados durante las ejecuciones
+# Informes CSV y subidas temporales
 solo_en_spotify.csv
 solo_en_youtube_music.csv
 no_encontradas_en_ytm.csv
+**/reports/*.csv
+!**/reports/.gitkeep
+**/uploads/*
+!**/uploads/.gitkeep
+
+# IDEs
+.idea/
+.vscode/

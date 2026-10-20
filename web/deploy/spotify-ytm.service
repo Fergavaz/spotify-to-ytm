@@ -1,0 +1,16 @@
+[Unit]
+Description=Spotify to YouTube Music Web Service (Gunicorn)
+After=network.target
+
+[Service]
+# Usuario que ejecutará la aplicación (ajustar si es necesario, ej: www-data o debian)
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/spotify-to-ytm-web
+Environment="PATH=/var/www/spotify-to-ytm-web/venv/bin"
+ExecStart=/var/www/spotify-to-ytm-web/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:5000 wsgi:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

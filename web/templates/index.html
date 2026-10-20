@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="es" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spotify to YouTube Music — Web</title>
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons & FontAwesome -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="bg-dark text-light">
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-black border-bottom border-secondary border-opacity-25 sticky-top py-3">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center gap-2 fw-bold fs-4" href="#">
+        <i class="fa-brands fa-spotify text-success fs-3"></i>
+        <i class="fa-solid fa-arrow-right-arrow-left text-muted fs-6"></i>
+        <i class="fa-brands fa-youtube text-danger fs-3"></i>
+        <span class="ms-1">Spotify <span class="text-secondary fw-normal">to</span> YTM</span>
+      </a>
+
+      <div class="d-flex align-items-center gap-3">
+        <!-- Auth Status Pill -->
+        <button id="btn-auth-status" class="btn btn-sm rounded-pill px-3 py-1 d-flex align-items-center gap-2 {{ 'btn-outline-success' if auth_ok else 'btn-outline-warning' }}" data-bs-toggle="modal" data-bs-target="#authModal">
+          <i class="fa-solid {{ 'fa-circle-check' if auth_ok else 'fa-triangle-exclamation' }}"></i>
+          <span id="auth-status-text">{{ 'YouTube Music Conectado' if auth_ok else 'Configurar YTM' }}</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="container py-4">
+
+    <!-- Auth Alert if not configured -->
+    <div id="auth-warning-alert" class="alert alert-warning border-0 bg-warning bg-opacity-10 text-warning d-flex align-items-center justify-content-between p-3 rounded-4 mb-4 {{ 'd-none' if auth_ok else '' }}">
+      <div class="d-flex align-items-center gap-3">
+        <i class="fa-solid fa-circle-exclamation fs-3"></i>
+        <div>
+          <h6 class="mb-0 fw-bold">YouTube Music no está autenticado</h6>
+          <small class="text-light text-opacity-75">Necesitas subir o configurar tu archivo <code>headers_auth.json</code> o <code>browser.json</code> para poder transferir canciones.</small>
+        </div>
+      </div>
+      <button class="btn btn-warning btn-sm fw-semibold rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#authModal">
+        Configurar ahora
+      </button>
+    </div>
+
+    <!-- Step 1: Input source selection -->
+    <div class="card bg-secondary bg-opacity-10 border-0 rounded-4 shadow-sm mb-4">
+      <div class="card-body p-4">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h5 class="fw-bold mb-0 d-flex align-items-center gap-2">
+            <span class="badge bg-success rounded-circle p-2 d-inline-flex justify-content-center align-items-center" style="width: 28px; height: 28px;">1</span>
+            Elige el origen de tu Playlist de Spotify
+          </h5>
+          <span class="text-secondary small">No requiere Spotify Premium</span>
+        </div>
+
+        <!-- Tabs -->
+        <ul class="nav nav-pills custom-pills mb-4" id="sourceTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active rounded-pill px-4" id="tab-url-btn" data-bs-toggle="pill" data-bs-target="#tab-url" type="button" role="tab">
+              <i class="fa-solid fa-link me-2"></i> Enlace Directo (URL)
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link rounded-pill px-4" id="tab-user-btn" data-bs-toggle="pill" data-bs-target="#tab-user" type="button" role="tab">
+              <i class="fa-solid fa-user me-2"></i> Por Usuario
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link rounded-pill px-4" id="tab-csv-btn" data-bs-toggle="pill" data-bs-target="#tab-csv" type="button" role="tab">
+              <i class="fa-solid fa-file-csv me-2"></i> Archivo CSV
+            </button>
+          </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="sourceTabsContent">
+
+          <!-- TAB 1: URL -->
+          <div class="tab-pane fade show active" id="tab-url" role="tabpanel">
+            <form id="form-fetch-url" class="row g-2 align-items-center">
+              <div class="col-12 col-md-9">
+                <div class="input-group">
+                  <span class="input-group-text bg-black border-secondary border-opacity-25 text-success">
+                    <i class="fa-brands fa-spotify fs-5"></i>
+                  </span>
+                  <input type="text" id="input-url" class="form-control form-control-lg bg-black border-secondary border-opacity-25 text-light" placeholder="Ej: https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M..." required>
+                </div>
+              </div>
+              <div class="col-12 col-md-3">
+                <button type="submit" id="btn-fetch-url" class="btn btn-success btn-lg w-100 fw-semibold d-flex align-items-center justify-content-center gap-2">
+                  <span class="spinner-border spinner-border-sm d-none" id="spinner-url" role="status"></span>
+                  <i class="fa-solid fa-magnifying-glass" id="icon-url"></i>
+                  <span>Cargar Playlist</span>
+                </button>
+              </div>
+            </form>
+            <div class="form-text text-secondary mt-2">
+              <i class="fa-solid fa-circle-info me-1"></i> Puedes pegar el enlace de cualquier lista pública de Spotify (incluso con más de 100 canciones).
+            </div>
+          </div>
+
+          <!-- TAB 2: USUARIO -->
+          <div class="tab-pane fade" id="tab-user" role="tabpanel">
+            <form id="form-fetch-user" class="row g-2 align-items-center mb-3">
+              <div class="col-12 col-md-9">
+                <div class="input-group">
+                  <span class="input-group-text bg-black border-secondary border-opacity-25 text-secondary">
+                    <i class="fa-solid fa-at fs-5"></i>
+                  </span>
+                  <input type="text" id="input-username" class="form-control form-control-lg bg-black border-secondary border-opacity-25 text-light" placeholder="Nombre de usuario o enlace de perfil (open.spotify.com/user/...)" required>
+                </div>
+              </div>
+              <div class="col-12 col-md-3">
+                <button type="submit" id="btn-fetch-user" class="btn btn-secondary btn-lg w-100 fw-semibold d-flex align-items-center justify-content-center gap-2">
+                  <span class="spinner-border spinner-border-sm d-none" id="spinner-user" role="status"></span>
+                  <i class="fa-solid fa-list-check" id="icon-user"></i>
+                  <span>Buscar Listas</span>
+                </button>
+              </div>
+            </form>
+
+            <!-- User Playlists Grid Container -->
+            <div id="user-playlists-container" class="d-none">
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <h6 class="text-secondary text-uppercase fw-bold small">Playlists públicas encontradas:</h6>
+              </div>
+              <div id="user-playlists-grid" class="row g-3">
+                <!-- Cards dynamically populated -->
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: CSV -->
+          <div class="tab-pane fade" id="tab-csv" role="tabpanel">
+            <div id="dropzone-csv" class="dropzone p-4 text-center border border-2 border-dashed border-secondary border-opacity-50 rounded-4 bg-black bg-opacity-50">
+              <i class="fa-solid fa-cloud-arrow-up text-secondary fs-1 mb-2"></i>
+              <h6>Arrastra tu archivo CSV aquí o <label for="file-csv" class="text-success cursor-pointer fw-bold text-decoration-underline">selecciona un archivo</label></h6>
+              <p class="text-secondary small mb-0">Compatible con exportaciones de Exportify, Soundiiz, Spotlistr, TuneMyMusic...</p>
+              <input type="file" id="file-csv" class="d-none" accept=".csv">
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Tracklist Preview and Transfer Setup (Hidden until tracks are loaded) -->
+    <div id="preview-section" class="card bg-secondary bg-opacity-10 border-0 rounded-4 shadow-sm mb-4 d-none">
+      <div class="card-body p-4">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+          <div>
+            <h5 class="fw-bold mb-1 d-flex align-items-center gap-2">
+              <span class="badge bg-danger rounded-circle p-2 d-inline-flex justify-content-center align-items-center" style="width: 28px; height: 28px;">2</span>
+              Configurar Destino en YouTube Music
+            </h5>
+            <span class="badge bg-success bg-opacity-25 text-success rounded-pill px-3 py-1 fs-6" id="badge-track-count">
+              <i class="fa-solid fa-music me-1"></i> <span id="count-number">0</span> canciones cargadas
+            </span>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-12 col-md-6">
+            <label for="input-target-name" class="form-label fw-semibold text-secondary">Nombre de la Playlist en YouTube Music:</label>
+            <div class="input-group">
+              <span class="input-group-text bg-black border-secondary border-opacity-25 text-danger">
+                <i class="fa-brands fa-youtube fs-5"></i>
+              </span>
+              <input type="text" id="input-target-name" class="form-control form-control-lg bg-black border-secondary border-opacity-25 text-light fw-bold" placeholder="Nombre para la lista en YouTube Music">
+            </div>
+            <div class="form-text text-secondary">
+              Si supera las 5.000 canciones, se dividirá automáticamente en listas consecutivas ("Lista", "Lista 2", etc.).
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 d-flex flex-column justify-content-center">
+            <div class="form-check form-switch fs-5 mb-2">
+              <input class="form-check-input" type="checkbox" role="switch" id="switch-sync" checked>
+              <label class="form-check-label fs-6 fw-semibold" for="switch-sync">
+                Modo Sincronización Inteligente
+              </label>
+            </div>
+            <p class="text-secondary small mb-0 ps-1">
+              Si ya existe una lista con este nombre en tu cuenta de YouTube Music, solo añadirá las canciones que falten, evitando duplicados.
+            </p>
+          </div>
+        </div>
+
+        <!-- Track Preview Accordion -->
+        <div class="accordion custom-accordion mb-4" id="accordionPreview">
+          <div class="accordion-item bg-black border border-secondary border-opacity-25 rounded-3 overflow-hidden">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed bg-black text-light shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTracks">
+                <i class="fa-solid fa-list-ol text-secondary me-2"></i> Ver canciones a transferir (<span id="accordion-count">0</span>)
+              </button>
+            </h2>
+            <div id="collapseTracks" class="accordion-collapse collapse" data-bs-parent="#accordionPreview">
+              <div class="accordion-body p-0 table-responsive max-h-350">
+                <table class="table table-dark table-striped table-hover mb-0 align-middle">
+                  <thead>
+                    <tr class="text-secondary small">
+                      <th style="width: 50px;">#</th>
+                      <th>Título</th>
+                      <th>Artista(s)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="table-tracks-body">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Launch Button -->
+        <div class="d-grid gap-2">
+          <button id="btn-start-transfer" class="btn btn-danger btn-lg py-3 fw-bold fs-5 rounded-pill shadow d-flex align-items-center justify-content-center gap-3">
+            <i class="fa-brands fa-youtube fs-3"></i>
+            <span>Iniciar Transferencia a YouTube Music</span>
+            <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Step 3: Real-Time Live Monitor (Hidden until transfer starts) -->
+    <div id="monitor-section" class="card bg-secondary bg-opacity-10 border-0 rounded-4 shadow-sm mb-4 d-none">
+      <div class="card-body p-4">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h5 class="fw-bold mb-0 d-flex align-items-center gap-2">
+            <span class="badge bg-primary rounded-circle p-2 d-inline-flex justify-content-center align-items-center" style="width: 28px; height: 28px;">3</span>
+            Progreso en Vivo de la Transferencia
+          </h5>
+          <span id="badge-status" class="badge bg-info text-dark rounded-pill px-3 py-1">En curso</span>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress progress-tall bg-black mb-3 rounded-pill p-1">
+          <div id="transfer-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-gradient-danger rounded-pill fw-bold" role="progressbar" style="width: 0%">
+            <span id="progress-percent">0%</span>
+          </div>
+        </div>
+
+        <!-- Metric Counter Tiles -->
+        <div class="row g-2 mb-4 text-center">
+          <div class="col-6 col-md-3">
+            <div class="metric-card bg-black p-3 rounded-3 border border-secondary border-opacity-25">
+              <span class="text-secondary small text-uppercase fw-semibold">Procesadas</span>
+              <h3 class="fw-bold text-light mb-0" id="stat-processed">0</h3>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="metric-card bg-black p-3 rounded-3 border border-secondary border-opacity-25">
+              <span class="text-secondary small text-uppercase fw-semibold">Añadidas a YTM</span>
+              <h3 class="fw-bold text-success mb-0" id="stat-added">0</h3>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="metric-card bg-black p-3 rounded-3 border border-secondary border-opacity-25">
+              <span class="text-secondary small text-uppercase fw-semibold">Ya Existían</span>
+              <h3 class="fw-bold text-info mb-0" id="stat-existing">0</h3>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="metric-card bg-black p-3 rounded-3 border border-secondary border-opacity-25">
+              <span class="text-secondary small text-uppercase fw-semibold">No Encontradas</span>
+              <h3 class="fw-bold text-warning mb-0" id="stat-notfound">0</h3>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Terminal Logs -->
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="text-secondary small fw-bold text-uppercase"><i class="fa-solid fa-terminal me-1"></i> Registro de actividad:</span>
+          <span class="badge bg-black text-secondary border border-secondary border-opacity-25 rounded-pill px-2 py-1 small" id="log-count">0 eventos</span>
+        </div>
+        <div id="live-console" class="terminal-box bg-black text-light p-3 rounded-3 border border-secondary border-opacity-25 font-monospace small">
+          <div class="text-secondary">Esperando inicio...</div>
+        </div>
+
+        <!-- Finished Section -->
+        <div id="finished-actions" class="mt-4 p-3 bg-black rounded-3 border border-success border-opacity-25 d-none">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+              <h5 class="fw-bold text-success mb-1"><i class="fa-solid fa-circle-check me-2"></i>¡Transferencia Finalizada con Éxito!</h5>
+              <p class="text-secondary small mb-0" id="finished-summary-text">Todas las canciones procesadas.</p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+              <a id="btn-dl-notfound" href="#" class="btn btn-outline-warning btn-sm rounded-pill px-3">
+                <i class="fa-solid fa-download me-1"></i> Descargar no encontradas (.csv)
+              </a>
+              <a id="btn-dl-spotify" href="#" class="btn btn-outline-info btn-sm rounded-pill px-3">
+                <i class="fa-solid fa-download me-1"></i> Solo en Spotify (.csv)
+              </a>
+              <button class="btn btn-outline-light btn-sm rounded-pill px-3" onclick="location.reload();">
+                <i class="fa-solid fa-rotate-right me-1"></i> Transferir otra
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Auth Modal -->
+  <div class="modal fade" id="authModal" tabindex="-1" aria-labelledby="authModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content bg-dark text-light border border-secondary border-opacity-25 rounded-4 shadow-lg">
+        <div class="modal-header border-bottom border-secondary border-opacity-25 px-4 pt-4">
+          <h5 class="modal-title fw-bold d-flex align-items-center gap-2" id="authModalLabel">
+            <i class="fa-brands fa-youtube text-danger fs-4"></i> Autenticación de YouTube Music
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body px-4 py-3">
+          <p class="text-secondary small">
+            Para que la aplicación pueda crear playlists y añadir canciones a tu cuenta de YouTube Music, necesita las cabeceras de sesión de tu navegador (<code>headers_auth.json</code> o <code>browser.json</code>).
+          </p>
+
+          <!-- Current Status Callout -->
+          <div id="modal-auth-alert" class="alert {{ 'alert-success' if auth_ok else 'alert-warning' }} border-0 bg-opacity-10 d-flex align-items-center gap-3 rounded-3 mb-4">
+            <i class="fa-solid {{ 'fa-circle-check text-success' if auth_ok else 'fa-triangle-exclamation text-warning' }} fs-4"></i>
+            <div>
+              <div class="fw-bold" id="modal-auth-status-title">{{ 'Autenticado' if auth_ok else 'Pendiente de configurar' }}</div>
+              <small class="text-secondary" id="modal-auth-status-msg">{{ auth_msg }}</small>
+            </div>
+          </div>
+
+          <ul class="nav nav-tabs border-secondary border-opacity-25 mb-3" id="authModalTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active text-light" id="tab-auth-upload-btn" data-bs-toggle="tab" data-bs-target="#tab-auth-upload" type="button" role="tab">Subir Archivo JSON</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link text-light" id="tab-auth-paste-btn" data-bs-toggle="tab" data-bs-target="#tab-auth-paste" type="button" role="tab">Pegar Texto JSON</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link text-light" id="tab-auth-help-btn" data-bs-toggle="tab" data-bs-target="#tab-auth-help" type="button" role="tab">¿Cómo se obtiene?</button>
+            </li>
+          </ul>
+
+          <div class="tab-content" id="authModalTabsContent">
+            <!-- Upload JSON -->
+            <div class="tab-pane fade show active" id="tab-auth-upload" role="tabpanel">
+              <div class="mb-3">
+                <label for="input-auth-file" class="form-label text-secondary small">Selecciona tu archivo <code>headers_auth.json</code> o <code>browser.json</code>:</label>
+                <input class="form-control bg-black text-light border-secondary border-opacity-25" type="file" id="input-auth-file" accept=".json">
+              </div>
+              <button id="btn-upload-auth-file" class="btn btn-danger fw-semibold px-4 rounded-pill">
+                <span class="spinner-border spinner-border-sm d-none" id="spinner-auth-upload"></span>
+                Subir y Validar
+              </button>
+            </div>
+
+            <!-- Paste JSON -->
+            <div class="tab-pane fade" id="tab-auth-paste" role="tabpanel">
+              <div class="mb-3">
+                <label for="textarea-auth-json" class="form-label text-secondary small">Pega el contenido JSON de las cabeceras:</label>
+                <textarea class="form-control bg-black text-light border-secondary border-opacity-25 font-monospace small" id="textarea-auth-json" rows="8" placeholder='{ "cookie": "...", "x-goog-authuser": "0" }'></textarea>
+              </div>
+              <button id="btn-save-auth-text" class="btn btn-danger fw-semibold px-4 rounded-pill">
+                <span class="spinner-border spinner-border-sm d-none" id="spinner-auth-text"></span>
+                Guardar y Validar
+              </button>
+            </div>
+
+            <!-- Help Guide -->
+            <div class="tab-pane fade" id="tab-auth-help" role="tabpanel">
+              <ol class="small text-secondary ps-3 mb-0">
+                <li class="mb-2">Abre tu navegador (Chrome o Firefox) e inicia sesión en <a href="https://music.youtube.com" target="_blank" class="text-danger fw-semibold">music.youtube.com</a>.</li>
+                <li class="mb-2">Abre las Herramientas de Desarrollador (pulsa <kbd>F12</kbd> o clic derecho → <em>Inspeccionar</em>).</li>
+                <li class="mb-2">Ve a la pestaña <strong>Red (Network)</strong> y en el filtro pon <code>browse</code>.</li>
+                <li class="mb-2">Haz clic en cualquier enlace de YouTube Music (por ejemplo, "Explorar" o "Biblioteca").</li>
+                <li class="mb-2">Haz clic derecho en la petición <code>browse</code> que aparezca → <em>Copiar</em> → <em>Copiar como cURL</em> o <em>Copiar cabeceras de petición</em>.</li>
+                <li class="mb-2">Ejecuta en tu terminal el comando de configuración: <code>ytmusicapi browser</code> y pega las cabeceras solicitadas, o guárdalo como <code>headers_auth.json</code>.</li>
+              </ol>
+            </div>
+          </div>
+
+        </div>
+        <div class="modal-footer border-top border-secondary border-opacity-25 px-4 pb-4">
+          <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="liveToast" class="toast align-items-center text-bg-dark border border-secondary border-opacity-25 rounded-3" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body d-flex align-items-center gap-2">
+          <i id="toast-icon" class="fa-solid fa-circle-info text-info"></i>
+          <span id="toast-message">Notificación</span>
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap 5 Bundle JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Custom JS -->
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
