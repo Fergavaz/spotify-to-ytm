@@ -6,6 +6,7 @@ Servidor Flask con soporte para ejecución en segundo plano y despliegue en Apac
 
 import json
 import os
+import re
 import sys
 import time
 from flask import Flask, render_template, request, jsonify, send_file
@@ -121,9 +122,10 @@ def api_upload_auth():
             destino = os.path.join(DATA_DIR, "headers_auth.json")
             headers_text = contenido
 
-            # Si es un comando cURL copiado, extraer todas las cabeceras -H '...'
-            if contenido.startswith("curl") or "curl " in contenido[:20]:
-                h_matches = re.findall(r"-H\s+['\"]([^'\"]+)['\"]", contenido)
+            # Si es un comando cURL copiado, extraer todas las cabeceras -H '...' o --header "..."
+            if "curl " in contenido[:50] or contenido.startswith("curl"):
+                limpio = contenido.replace('^"', '"')
+                h_matches = re.findall(r"(?:-H|--header)\s+['\"]([^'\"]+)['\"]", limpio)
                 if h_matches:
                     headers_text = "\n".join(h_matches)
 

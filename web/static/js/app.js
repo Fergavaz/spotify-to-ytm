@@ -482,10 +482,14 @@ btnSaveAuthText.addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ json_content: jsonContent }),
     });
-    const data = await resp.json();
-    handleAuthResponse(data);
+    const data = await resp.json().catch(() => null);
+    if (data) {
+      handleAuthResponse(data);
+    } else {
+      showToast("Error en la respuesta del servidor.", "danger");
+    }
   } catch (err) {
-    showToast("Error al validar el contenido JSON.", "danger");
+    showToast("Error de conexión al enviar las cabeceras.", "danger");
   } finally {
     spinnerAuthText.classList.add("d-none");
     btnSaveAuthText.disabled = false;
