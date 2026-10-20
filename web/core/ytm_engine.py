@@ -20,24 +20,30 @@ PAUSA_BUSQUEDA = 0.25
 def encontrar_archivo_auth(directorio_base: str) -> Optional[str]:
     """
     Busca un archivo de autenticación válido en el directorio base o en la ruta global.
-    Prioridad: variable de entorno YTM_AUTH_FILE, oauth.json, headers_auth.json, browser.json.
+    Prioridad: headers_auth.json, browser.json (máxima compatibilidad nativa con InnerTube),
+    seguido de oauth.json.
     """
     env_auth = os.environ.get("YTM_AUTH_FILE")
     if env_auth and os.path.exists(env_auth) and os.path.getsize(env_auth) > 20:
         return env_auth
 
-    nombres = ["oauth.json", "headers_auth.json", "browser.json"]
+    nombres = ["headers_auth.json", "browser.json", "oauth.json"]
+    
+    # Primera pasada: devolver el primer archivo existente que pase la verificación activa
     for nombre in nombres:
-        ruta = os.path.join(directorio_base, nombre)
-        if os.path.exists(ruta) and os.path.getsize(ruta) > 20:
-            return ruta
-        # También comprobar en subcarpeta data o en el directorio padre por conveniencia
-        ruta_data = os.path.join(directorio_base, "data", nombre)
-        if os.path.exists(ruta_data) and os.path.getsize(ruta_data) > 20:
-            return ruta_data
-        ruta_padre = os.path.join(os.path.dirname(directorio_base), nombre)
-        if os.path.exists(ruta_padre) and os.path.getsize(ruta_padre) > 20:
-            return ruta_padre
+        for d in [directorio_base, os.path.join(directorio_base, "data"), os.path.dirname(directorio_base)]:
+            ruta = os.path.join(d, nombre)
+            if os.path.exists(ruta) and os.path.getsize(ruta) > 20:
+                ok, _ = verificar_autenticacion_ytm(ruta)
+                if ok:
+                    return ruta
+
+    # Segunda pasada: si ninguno pasó la prueba estricta, devolver el primer archivo existente
+    for nombre in nombres:
+        for d in [directorio_base, os.path.join(directorio_base, "data"), os.path.dirname(directorio_base)]:
+            ruta = os.path.join(d, nombre)
+            if os.path.exists(ruta) and os.path.getsize(ruta) > 20:
+                return ruta
     return None
 
 
@@ -68,13 +74,16 @@ def verificar_autenticacion_ytm(ruta_auth: str) -> tuple[bool, str]:
     """
     try:
         yt = obtener_cliente_ytm(ruta_auth)
-        # Comprobar llamada autenticada para detectar tokens o cookies expiradas (Error 401)
+        # Comprobar llamada autenticada a la biblioteca para verificar lectura de playlists
         try:
-            yt.get_history()
+            yt.get_library_playlists(limit=1)
         except Exception as e:
             msg = str(e).lower()
             if "unauthorized" in msg or "401" in msg or "sign in" in msg or "none" in msg:
-                return False, "La sesión de YouTube Music ha caducado (Error 401). Debes renovar tu archivo headers_auth.json o generar un oauth.json."
+                return False, "La sesión de YouTube Music ha caducado (Error 401). Debes renovar tu archivo headers_auth.json o browser.json."
+            elif "400" in msg or "invalid argument" in msg:
+                return False, "YouTube Music rechazó la petición (Error 400). Usa el método de Cabeceras / cURL (headers_auth.json)."
+            return False, f"Fallo al conectar con la biblioteca de YouTube Music: {str(e)}"
         return True, "Conectado correctamente a YouTube Music."
     except Exception as e:
         return False, f"Error de autenticación en YouTube Music: {str(e)}"
