@@ -90,21 +90,91 @@ def normalizar(texto: str) -> str:
 def normalizar_candidatos(texto: str) -> list[str]:
     """
     Genera candidatos de normalización para títulos complejos o formatos de vídeo
-    (ej: 'Valiente Bosque - ¿A Dónde Vamos?' -> ['a donde vamos', 'valiente bosque']).
+    (ej: 'Valiente Bosque - ¿A Dónde Vamos?' -> ['a donde vamos', 'valiente bosque'],
+     o 'Suerte (Whenever, Wherever)' -> ['suerte', 'whenever wherever']).
     """
-    candidatos = [_limpiar_cadena(texto)]
+    cands = [_limpiar_cadena(texto)]
+    # Si tiene guión 'Artista - Cancion' o 'Cancion - Artista'
     if " - " in texto:
         partes = texto.split(" - ")
-        candidatos.append(_limpiar_cadena(partes[0]))
-        if len(partes) > 1:
-            candidatos.append(_limpiar_cadena(partes[1]))
-    return list(dict.fromkeys(c for c in candidatos if c))
+        for p in partes:
+            n = _limpiar_cadena(p)
+            if n:
+                cands.append(n)
+    # Si tiene paréntesis con título bilingüe ej: 'Suerte (Whenever, Wherever)'
+    m = re.search(r"^([^(]+)\s*\(([^)]+)\)", texto)
+    if m:
+        c1 = _limpiar_cadena(m.group(1))
+        c2 = _limpiar_cadena(m.group(2))
+        if c1:
+            cands.append(c1)
+        if c2:
+            cands.append(c2)
+    return list(dict.fromkeys(c for c in cands if c))
 
 
 def clave(titulo: str, artistas: list[str]) -> tuple[str, str]:
     """Genera clave normalizada (titulo_base, primer_artista)."""
     primero = artistas[0] if artistas else ""
     return normalizar(titulo), _limpiar_cadena(primero)
+
+
+def canciones_coinciden(t_a: dict, t_b: dict) -> bool:
+    """
+    Compara dos diccionarios de canciones ({'titulo': ..., 'artistas': [...]})
+    utilizando extracción multietapa de candidatos, coincidencias cruzadas entre todos los artistas
+    y detección de formatos de YouTube (ej: 'Artista - Título (Letra)' con canal como artista).
+    """
+    tit_a_raw = t_a.get("titulo", "")
+    tit_b_raw = t_b.get("titulo", "")
+    arts_a = [_limpiar_cadena(a) for a in t_a.get("artistas", []) if a]
+    arts_b = [_limpiar_cadena(a) for a in t_b.get("artistas", []) if a]
+
+    cands_a = normalizar_candidatos(tit_a_raw)
+    cands_b = normalizar_candidatos(tit_b_raw)
+
+    # 1. Comprobar si los títulos coinciden
+    tit_match = False
+    for ca in cands_a:
+        for cb in cands_b:
+            if ca == cb:
+                tit_match = True
+                break
+            sim = difflib.SequenceMatcher(None, ca, cb).ratio()
+            if sim >= 0.82 or (len(ca) >= 4 and ca in cb) or (len(cb) >= 4 and cb in ca):
+                tit_match = True
+                break
+        if tit_match:
+            break
+
+    if not tit_match:
+        return False
+
+    # 2. Comprobar artistas:
+    if not arts_a or not arts_b:
+        return True
+
+    # a) ¿Coincide algún artista de A con algún artista de B?
+    for a in arts_a:
+        for b in arts_b:
+            if a == b:
+                return True
+            sim = difflib.SequenceMatcher(None, a, b).ratio()
+            if sim >= 0.80 or (len(a) >= 4 and a in b) or (len(b) >= 4 and b in a):
+                return True
+
+    # b) ¿El artista de A está dentro del título de B o viceversa?
+    tit_a_limpio = _limpiar_cadena(tit_a_raw)
+    tit_b_limpio = _limpiar_cadena(tit_b_raw)
+
+    for a in arts_a:
+        if len(a) >= 4 and a in tit_b_limpio:
+            return True
+    for b in arts_b:
+        if len(b) >= 4 and b in tit_a_limpio:
+            return True
+
+    return False
 
 
 def coincide(a: tuple[str, str], b: tuple[str, str], raw_a: str = "", raw_b: str = "") -> bool:
@@ -773,7 +843,8 @@ def buscar_en_ytm(yt: YTMusic, cancion: dict) -> str | None:
             resultados = yt.search(query, filter="songs", limit=7)
             for r in resultados:
                 artistas_r = [a["name"] for a in r.get("artists", []) if isinstance(a, dict)]
-                if coincide(k, clave(r["title"], artistas_r), raw_a=tit_original, raw_b=r["title"]):
+                cand_r = {"titulo": r["title"], "artistas": artistas_r}
+                if canciones_coinciden(cancion, cand_r) or coincide(k, clave(r["title"], artistas_r), raw_a=tit_original, raw_b=r["title"]):
                     return r["videoId"]
         except Exception:
             pass
@@ -784,7 +855,8 @@ def buscar_en_ytm(yt: YTMusic, cancion: dict) -> str | None:
             resultados = yt.search(query, filter="videos", limit=7)
             for r in resultados:
                 artistas_r = [a["name"] for a in r.get("artists", []) if isinstance(a, dict)]
-                if coincide(k, clave(r["title"], artistas_r), raw_a=tit_original, raw_b=r["title"]):
+                cand_r = {"titulo": r["title"], "artistas": artistas_r}
+                if canciones_coinciden(cancion, cand_r) or coincide(k, clave(r["title"], artistas_r), raw_a=tit_original, raw_b=r["title"]):
                     return r["videoId"]
         except Exception:
             pass
@@ -913,12 +985,10 @@ def guardar_csv(ruta: str, filas: list[dict]) -> None:
 
 def diferencia(origen: list[dict], destino: list[dict]) -> list[dict]:
     """Devuelve las canciones de 'origen' que no están en 'destino'."""
-    claves_destino = [clave(t["titulo"], t["artistas"]) for t in destino]
     faltan = []
-    for t in origen:
-        k = clave(t["titulo"], t["artistas"])
-        if not any(coincide(k, c) for c in claves_destino):
-            faltan.append(t)
+    for t_orig in origen:
+        if not any(canciones_coinciden(t_orig, t_dest) for t_dest in destino):
+            faltan.append(t_orig)
     return faltan
 
 

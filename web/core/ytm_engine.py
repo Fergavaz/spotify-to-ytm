@@ -11,7 +11,7 @@ import urllib.parse
 from typing import Callable, Optional
 from ytmusicapi import YTMusic
 from ytmusicapi.auth.oauth import OAuthCredentials
-from core.normalizer import clave, coincide, normalizar
+from core.normalizer import clave, coincide, normalizar, canciones_coinciden
 
 MAX_CANCIONES_LISTA_YTM = 5000
 LOTE_API = 50
@@ -259,12 +259,10 @@ def buscar_en_ytm(yt: YTMusic, cancion: dict) -> Optional[str]:
 
 def diferencia_canciones(origen: list[dict], destino: list[dict]) -> list[dict]:
     """Devuelve las canciones de 'origen' que no existen en 'destino'."""
-    claves_destino = [clave(t["titulo"], t["artistas"]) for t in destino]
     faltan = []
-    for t in origen:
-        k = clave(t["titulo"], t["artistas"])
-        if not any(coincide(k, c) for c in claves_destino):
-            faltan.append(t)
+    for t_orig in origen:
+        if not any(canciones_coinciden(t_orig, t_dest) for t_dest in destino):
+            faltan.append(t_orig)
     return faltan
 
 
@@ -285,30 +283,26 @@ def planificar_transferencia(
 
     if listas_existentes and modo_sync:
         canciones_ytm = obtener_canciones_ytm(yt, listas_existentes)
-        claves_ytm = [clave(t["titulo"], t["artistas"]) for t in canciones_ytm]
-        claves_sp = [clave(t["titulo"], t["artistas"]) for t in canciones_spotify]
 
         canciones_a_anadir = []
         canciones_ya_en_ytm = []
-        for t in canciones_spotify:
-            k = clave(t["titulo"], t["artistas"])
-            if any(coincide(k, c) for c in claves_ytm):
-                canciones_ya_en_ytm.append(t)
+        for t_sp in canciones_spotify:
+            if any(canciones_coinciden(t_sp, t_ytm) for t_ytm in canciones_ytm):
+                canciones_ya_en_ytm.append(t_sp)
             else:
-                canciones_a_anadir.append(t)
+                canciones_a_anadir.append(t_sp)
 
         # Detectar canciones que están en YTM pero NO en Spotify
         solo_en_ytm = []
-        for t in canciones_ytm:
-            k = clave(t["titulo"], t["artistas"])
-            if not any(coincide(k, c) for c in claves_sp):
-                q = f"{t['titulo']} {' '.join(t['artistas'])}".strip()
+        for t_ytm in canciones_ytm:
+            if not any(canciones_coinciden(t_sp, t_ytm) for t_sp in canciones_spotify):
+                q = f"{t_ytm['titulo']} {' '.join(t_ytm['artistas'])}".strip()
                 solo_en_ytm.append({
-                    "id": t.get("id"),
-                    "titulo": t["titulo"],
-                    "artistas": t["artistas"],
+                    "id": t_ytm.get("id"),
+                    "titulo": t_ytm["titulo"],
+                    "artistas": t_ytm["artistas"],
                     "spotify_search_url": f"https://open.spotify.com/search/{urllib.parse.quote(q)}",
-                    "ytm_url": f"https://music.youtube.com/watch?v={t['id']}" if t.get("id") else None,
+                    "ytm_url": f"https://music.youtube.com/watch?v={t_ytm['id']}" if t_ytm.get("id") else None,
                 })
 
         nombres_existentes = [p["title"] for p in listas_existentes]
