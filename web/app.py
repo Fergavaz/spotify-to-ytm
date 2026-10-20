@@ -312,24 +312,34 @@ def api_fetch_url():
 def api_fetch_user():
     """Busca las playlists públicas de un usuario de Spotify."""
     data = request.get_json() or {}
-    username = data.get("username", "").strip()
-    if not username:
+    raw_input = data.get("username", "").strip()
+    if not raw_input:
         return jsonify({"success": False, "error": "Introduce un nombre de usuario o perfil de Spotify."}), 400
 
+    clean_user = raw_input
+    if "spotify.com/user/" in clean_user:
+        clean_user = clean_user.split("spotify.com/user/")[1].split("?")[0].strip("/")
+    elif "?" in clean_user:
+        clean_user = clean_user.split("?")[0].strip("/")
+
+    profile_url = f"https://open.spotify.com/user/{clean_user}"
+
     try:
-        playlists = buscar_playlists_usuario(username)
-        if not playlists:
-            return jsonify({
-                "success": False,
-                "error": f"No se encontraron playlists públicas para '{username}'.",
-            }), 404
+        playlists = buscar_playlists_usuario(raw_input)
         return jsonify({
             "success": True,
-            "username": username,
-            "playlists": playlists,
+            "username": clean_user,
+            "profile_url": profile_url,
+            "playlists": playlists or [],
+            "count": len(playlists) if playlists else 0,
         })
     except Exception as e:
-        return jsonify({"success": False, "error": f"Error al buscar usuario: {str(e)}"}), 500
+        return jsonify({
+            "success": False,
+            "username": clean_user,
+            "profile_url": profile_url,
+            "error": f"Error al buscar usuario: {str(e)}",
+        }), 500
 
 
 @app.route("/api/upload-csv", methods=["POST"])

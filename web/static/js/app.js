@@ -21,6 +21,11 @@ const spinnerUser = document.getElementById("spinner-user");
 const iconUser = document.getElementById("icon-user");
 const userPlaylistsContainer = document.getElementById("user-playlists-container");
 const userPlaylistsGrid = document.getElementById("user-playlists-grid");
+const userProfileBanner = document.getElementById("user-profile-banner");
+const userProfileBadge = document.getElementById("user-profile-badge");
+const btnOpenSpotifyProfile = document.getElementById("btn-open-spotify-profile");
+const btnSwitchToUrlTab = document.getElementById("btn-switch-to-url-tab");
+const userPlaylistsCount = document.getElementById("user-playlists-count");
 
 const dropzoneCsv = document.getElementById("dropzone-csv");
 const fileCsv = document.getElementById("file-csv");
@@ -178,13 +183,23 @@ formFetchUser.addEventListener("submit", async (e) => {
     });
     const data = await resp.json();
 
-    if (!data.success) {
-      showToast(data.error || "No se encontraron playlists públicas.", "warning");
+    if (data.username && data.profile_url) {
+      userProfileBanner.classList.remove("d-none");
+      userProfileBadge.textContent = data.username;
+      btnOpenSpotifyProfile.href = data.profile_url;
+    }
+
+    if (!data.success || !data.playlists || data.playlists.length === 0) {
+      userPlaylistsContainer.classList.add("d-none");
+      showToast(data.error || "No se encontraron playlists en la vista previa del perfil.", "warning");
       return;
     }
 
+    if (userPlaylistsCount) {
+      userPlaylistsCount.textContent = `${data.playlists.length} listas`;
+    }
     renderUserPlaylists(data.playlists);
-    showToast(`Se encontraron ${data.playlists.length} playlists públicas.`, "success");
+    showToast(`Se encontraron ${data.playlists.length} playlists en la vista previa.`, "success");
   } catch (err) {
     showToast("Error de red al buscar usuario.", "danger");
   } finally {
@@ -201,25 +216,52 @@ function renderUserPlaylists(playlists) {
     col.className = "col-12 col-md-6 col-lg-4";
     col.innerHTML = `
       <div class="user-playlist-card bg-black p-3 rounded-3 d-flex align-items-center justify-content-between h-100" data-url="${escapeHtml(pl.url)}" data-name="${escapeHtml(pl.nombre)}">
-        <div class="me-2 overflow-hidden">
-          <div class="fw-bold text-light text-truncate">${escapeHtml(pl.nombre)}</div>
-          <div class="text-secondary small"><i class="fa-solid fa-music me-1"></i>${pl.total} canciones</div>
+        <div class="me-2 overflow-hidden flex-grow-1">
+          <div class="fw-bold text-light text-truncate" title="${escapeHtml(pl.nombre)}">${escapeHtml(pl.nombre)}</div>
+          <div class="text-secondary small d-flex align-items-center gap-2">
+            <span><i class="fa-solid fa-music me-1"></i>${pl.total} canciones</span>
+          </div>
         </div>
-        <button class="btn btn-sm btn-outline-success rounded-pill px-3 py-1 flex-shrink-0 select-playlist-btn">
-          Elegir
-        </button>
+        <div class="d-flex align-items-center gap-1 flex-shrink-0">
+          <button class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1 copy-playlist-btn" title="Copiar enlace directo">
+            <i class="fa-regular fa-copy"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-success rounded-pill px-3 py-1 select-playlist-btn fw-semibold">
+            Elegir
+          </button>
+        </div>
       </div>
     `;
 
-    const btn = col.querySelector(".select-playlist-btn");
-    btn.addEventListener("click", () => {
+    const btnSelect = col.querySelector(".select-playlist-btn");
+    btnSelect.addEventListener("click", () => {
       fetchPlaylistFromCard(pl.url);
+    });
+
+    const btnCopy = col.querySelector(".copy-playlist-btn");
+    btnCopy.addEventListener("click", (e) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(pl.url).then(() => {
+        showToast(`Enlace copiado al portapapeles: ${pl.nombre}`, "info");
+      }).catch(() => {
+        showToast(pl.url, "info");
+      });
     });
 
     userPlaylistsGrid.appendChild(col);
   });
 
   userPlaylistsContainer.classList.remove("d-none");
+}
+
+if (btnSwitchToUrlTab) {
+  btnSwitchToUrlTab.addEventListener("click", () => {
+    const tabUrlBtn = document.getElementById("tab-url-btn");
+    if (tabUrlBtn) tabUrlBtn.click();
+    setTimeout(() => {
+      inputUrl.focus();
+    }, 150);
+  });
 }
 
 async function fetchPlaylistFromCard(url) {

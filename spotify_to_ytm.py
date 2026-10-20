@@ -631,8 +631,11 @@ def seleccionar_playlist_alternativa() -> tuple[str, list[dict]]:
                 print("     Verifica que el usuario tenga listas públicas o usa la opción 1 (Enlace directo).")
                 continue
 
-            print(f"\n📋 Playlists públicas de '{usuario_limpio}':")
-            print(f"{'#':>4}  {'Playlist':<50} {'Canciones':>10}")
+            print(f"\n📋 Playlists públicas encontradas de '{usuario_limpio}':")
+            print(f"🔗 Perfil completo en Spotify: https://open.spotify.com/user/{usuario_limpio}")
+            print("💡 Nota: Spotify solo expone hasta 10 listas en la vista previa del perfil.")
+            print("   Si buscas otra lista de tu cuenta, abre el perfil anterior en Spotify, copia el enlace y usa la opción 1 (Enlace directo).")
+            print(f"\n{'#':>4}  {'Playlist':<50} {'Canciones':>10}")
             print("─" * 68)
             for i, pl in enumerate(playlists, 1):
                 print(f"{i:>4}  {pl['nombre']:<50} {str(pl['total']):>10}")

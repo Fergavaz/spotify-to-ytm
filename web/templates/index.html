@@ -128,10 +128,44 @@
               </div>
             </form>
 
+            <!-- Acceso directo al perfil de Spotify (Banner dinámico) -->
+            <div id="user-profile-banner" class="alert bg-black bg-opacity-75 border border-success border-opacity-50 rounded-4 p-3 mb-4 d-none">
+              <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div class="d-flex align-items-center gap-3">
+                  <div class="rounded-circle bg-success bg-opacity-25 text-success p-2 d-flex align-items-center justify-content-center" style="width: 46px; height: 46px; min-width: 46px;">
+                    <i class="fa-brands fa-spotify fs-3"></i>
+                  </div>
+                  <div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                      <span class="fw-bold text-light fs-6">Perfil de Spotify:</span>
+                      <span id="user-profile-badge" class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-2 py-1"></span>
+                    </div>
+                    <div class="text-secondary small mt-1">
+                      <i class="fa-solid fa-circle-info text-info me-1"></i>
+                      Spotify solo expone 10 playlists en la vista previa web. Si tu lista no aparece abajo, abre el perfil en Spotify para copiar su enlace directo.
+                    </div>
+                  </div>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <a id="btn-open-spotify-profile" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-success fw-semibold btn-sm px-3 py-2 rounded-pill d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                    <span>Abrir Perfil en Spotify</span>
+                  </a>
+                  <button type="button" id="btn-switch-to-url-tab" class="btn btn-outline-light btn-sm px-3 py-2 rounded-pill d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-link"></i>
+                    <span>Ir a Enlace Directo</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <!-- User Playlists Grid Container -->
             <div id="user-playlists-container" class="d-none">
-              <div class="d-flex align-items-center justify-content-between mb-2">
-                <h6 class="text-secondary text-uppercase fw-bold small">Playlists públicas encontradas:</h6>
+              <div class="d-flex align-items-center justify-content-between mb-3">
+                <h6 class="text-secondary text-uppercase fw-bold small mb-0">
+                  <i class="fa-solid fa-layer-group me-1"></i> Playlists públicas en la vista previa:
+                </h6>
+                <span id="user-playlists-count" class="badge bg-secondary rounded-pill"></span>
               </div>
               <div id="user-playlists-grid" class="row g-3">
                 <!-- Cards dynamically populated -->
