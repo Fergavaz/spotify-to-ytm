@@ -341,19 +341,82 @@
 
           <ul class="nav nav-tabs border-secondary border-opacity-25 mb-3" id="authModalTabs" role="tablist">
             <li class="nav-item" role="presentation">
-              <button class="nav-link active text-light" id="tab-auth-upload-btn" data-bs-toggle="tab" data-bs-target="#tab-auth-upload" type="button" role="tab">Subir Archivo JSON</button>
+              <button class="nav-link active text-light fw-bold" id="tab-auth-oauth-btn" data-bs-toggle="tab" data-bs-target="#tab-auth-oauth" type="button" role="tab">
+                <i class="fa-brands fa-google text-danger me-1"></i> Google OAuth (Permanente)
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link text-light" id="tab-auth-upload-btn" data-bs-toggle="tab" data-bs-target="#tab-auth-upload" type="button" role="tab">Subir Archivo JSON</button>
             </li>
             <li class="nav-item" role="presentation">
               <button class="nav-link text-light" id="tab-auth-paste-btn" data-bs-toggle="tab" data-bs-target="#tab-auth-paste" type="button" role="tab">Pegar Texto JSON</button>
             </li>
             <li class="nav-item" role="presentation">
-              <button class="nav-link text-light" id="tab-auth-help-btn" data-bs-toggle="tab" data-bs-target="#tab-auth-help" type="button" role="tab">¿Cómo se obtiene?</button>
+              <button class="nav-link text-light" id="tab-auth-help-btn" data-bs-toggle="tab" data-bs-target="#tab-auth-help" type="button" role="tab">Ayuda</button>
             </li>
           </ul>
 
           <div class="tab-content" id="authModalTabsContent">
-            <!-- Upload JSON -->
-            <div class="tab-pane fade show active" id="tab-auth-upload" role="tabpanel">
+            <!-- TAB 1: GOOGLE OAUTH -->
+            <div class="tab-pane fade show active" id="tab-auth-oauth" role="tabpanel">
+              <div id="oauth-step-input">
+                <p class="text-secondary small mb-3">
+                  Google OAuth es el método más fiable: vincula tu cuenta de Google mediante el flujo oficial para dispositivos y <strong>nunca caduca</strong> (se auto-renueva).
+                </p>
+                <div class="mb-3">
+                  <label for="input-oauth-client-id" class="form-label text-secondary small fw-bold">Google Client ID:</label>
+                  <input type="text" id="input-oauth-client-id" class="form-control bg-black text-light border-secondary border-opacity-25" placeholder="Ej: 123456789-xxx.apps.googleusercontent.com">
+                </div>
+                <div class="mb-3">
+                  <label for="input-oauth-client-secret" class="form-label text-secondary small fw-bold">Google Client Secret:</label>
+                  <input type="password" id="input-oauth-client-secret" class="form-control bg-black text-light border-secondary border-opacity-25" placeholder="Ej: GOCSPX-xxxx">
+                </div>
+                <button id="btn-start-oauth" class="btn btn-danger fw-semibold px-4 rounded-pill d-flex align-items-center gap-2">
+                  <span class="spinner-border spinner-border-sm d-none" id="spinner-oauth-start"></span>
+                  <i class="fa-brands fa-google"></i>
+                  <span>Iniciar Vinculación con Google</span>
+                </button>
+
+                <div class="mt-3 p-3 bg-black bg-opacity-50 rounded-3 border border-secondary border-opacity-25 small text-secondary">
+                  <span class="fw-bold text-light"><i class="fa-solid fa-circle-question me-1 text-info"></i>¿Cómo obtener tu Client ID y Secret en 2 minutos?</span>
+                  <ol class="mt-2 mb-0 ps-3">
+                    <li>Entra en <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-danger fw-semibold">Google Cloud Console</a> y crea un proyecto.</li>
+                    <li>En la biblioteca de APIs, habilita <strong>YouTube Data API v3</strong>.</li>
+                    <li>Ve a <strong>Credenciales</strong> → <strong>Crear credenciales</strong> → <strong>ID de cliente de OAuth</strong>.</li>
+                    <li>Elige Tipo de aplicación: <strong>TV y dispositivos de entrada limitada</strong> (TVs and Limited Input devices).</li>
+                    <li>Copia el Client ID y Client Secret y pégalos aquí arriba.</li>
+                  </ol>
+                </div>
+              </div>
+
+              <!-- Step 2: Waiting for user confirmation -->
+              <div id="oauth-step-waiting" class="d-none text-center py-3">
+                <h5 class="fw-bold text-light mb-2">Autoriza la aplicación en Google</h5>
+                <p class="text-secondary small mb-3">
+                  Pulsa el botón para abrir la página de Google y confirma el siguiente código si te lo solicita:
+                </p>
+                <div class="d-inline-block bg-black px-4 py-2 rounded-4 border border-warning border-opacity-50 mb-3 shadow">
+                  <span id="oauth-display-code" class="display-6 fw-bold text-warning font-monospace">----</span>
+                </div>
+                <div class="d-flex justify-content-center gap-2 mb-3">
+                  <a id="oauth-btn-open-google" href="#" target="_blank" class="btn btn-success btn-lg px-4 rounded-pill fw-bold d-flex align-items-center gap-2">
+                    <i class="fa-brands fa-google"></i>
+                    <span>Abrir Google y Confirmar</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square small ms-1"></i>
+                  </a>
+                  <button id="btn-cancel-oauth" class="btn btn-outline-secondary rounded-pill px-3">
+                    Cancelar
+                  </button>
+                </div>
+                <div class="d-flex align-items-center justify-content-center gap-2 text-secondary small">
+                  <span class="spinner-border spinner-border-sm text-info"></span>
+                  <span>Esperando confirmación en tu cuenta de Google...</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 2: UPLOAD JSON -->
+            <div class="tab-pane fade" id="tab-auth-upload" role="tabpanel">
               <div class="mb-3">
                 <label for="input-auth-file" class="form-label text-secondary small">Selecciona tu archivo <code>headers_auth.json</code> o <code>browser.json</code>:</label>
                 <input class="form-control bg-black text-light border-secondary border-opacity-25" type="file" id="input-auth-file" accept=".json">

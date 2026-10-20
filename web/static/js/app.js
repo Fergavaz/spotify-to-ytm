@@ -511,3 +511,95 @@ function handleAuthResponse(data) {
     modalAuthStatusMsg.textContent = data.error || data.message;
   }
 }
+
+// ── Google OAuth Flow ────────────────────────────────────────────────────────
+const btnStartOauth = document.getElementById("btn-start-oauth");
+const spinnerOauthStart = document.getElementById("spinner-oauth-start");
+const inputOauthClientId = document.getElementById("input-oauth-client-id");
+const inputOauthClientSecret = document.getElementById("input-oauth-client-secret");
+const oauthStepInput = document.getElementById("oauth-step-input");
+const oauthStepWaiting = document.getElementById("oauth-step-waiting");
+const oauthDisplayCode = document.getElementById("oauth-display-code");
+const oauthBtnOpenGoogle = document.getElementById("oauth-btn-open-google");
+const btnCancelOauth = document.getElementById("btn-cancel-oauth");
+
+let oauthPollInterval = null;
+
+if (btnStartOauth) {
+  btnStartOauth.addEventListener("click", async () => {
+    const clientId = inputOauthClientId.value.trim();
+    const clientSecret = inputOauthClientSecret.value.trim();
+
+    if (!clientId || !clientSecret) {
+      showToast("Por favor, introduce tu Google Client ID y Client Secret.", "warning");
+      return;
+    }
+
+    spinnerOauthStart.classList.remove("d-none");
+    btnStartOauth.disabled = true;
+
+    try {
+      const resp = await fetch("/api/oauth/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
+      });
+      const data = await resp.json();
+
+      if (!data.success) {
+        showToast(data.error || "No se pudo iniciar el flujo OAuth.", "danger");
+        return;
+      }
+
+      oauthDisplayCode.textContent = data.user_code;
+      oauthBtnOpenGoogle.href = data.direct_url;
+      oauthStepInput.classList.add("d-none");
+      oauthStepWaiting.classList.remove("d-none");
+
+      // Auto-abrir en nueva pestaña para comodidad del usuario
+      window.open(data.direct_url, "_blank");
+
+      startPollingOauthToken(data.session_id, data.interval || 5);
+    } catch (e) {
+      showToast("Error de conexión al iniciar OAuth.", "danger");
+    } finally {
+      spinnerOauthStart.classList.add("d-none");
+      btnStartOauth.disabled = false;
+    }
+  });
+}
+
+function startPollingOauthToken(sessionId, intervalSec) {
+  if (oauthPollInterval) clearInterval(oauthPollInterval);
+
+  oauthPollInterval = setInterval(async () => {
+    try {
+      const resp = await fetch(`/api/oauth/check/${sessionId}`);
+      const data = await resp.json();
+
+      if (data.status === "success") {
+        clearInterval(oauthPollInterval);
+        oauthStepWaiting.classList.add("d-none");
+        oauthStepInput.classList.remove("d-none");
+        handleAuthResponse(data);
+        showToast("¡Google OAuth vinculado con éxito!", "success");
+      } else if (data.status === "error") {
+        clearInterval(oauthPollInterval);
+        oauthStepWaiting.classList.add("d-none");
+        oauthStepInput.classList.remove("d-none");
+        showToast(data.error || "Error durante la autorización de Google.", "danger");
+      }
+    } catch (e) {
+      console.error("Error comprobando token OAuth:", e);
+    }
+  }, Math.max(3000, intervalSec * 1000));
+}
+
+if (btnCancelOauth) {
+  btnCancelOauth.addEventListener("click", () => {
+    if (oauthPollInterval) clearInterval(oauthPollInterval);
+    oauthStepWaiting.classList.add("d-none");
+    oauthStepInput.classList.remove("d-none");
+    showToast("Flujo OAuth cancelado.", "info");
+  });
+}

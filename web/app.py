@@ -7,6 +7,7 @@ Servidor Flask con soporte para ejecución en segundo plano y despliegue en Apac
 import json
 import os
 import sys
+import time
 from flask import Flask, render_template, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 
@@ -18,6 +19,8 @@ from core.spotify_reader import (
 from core.ytm_engine import (
     encontrar_archivo_auth,
     verificar_autenticacion_ytm,
+    iniciar_flujo_oauth,
+    comprobar_token_oauth,
 )
 from core.job_runner import (
     crear_tarea,
@@ -103,6 +106,89 @@ def api_upload_auth():
         "message": msg,
         "auth_file": os.path.basename(destino),
     })
+
+
+OAUTH_FLOWS = {}
+
+
+@app.route("/api/oauth/init", methods=["POST"])
+def api_oauth_init():
+    """Inicia el flujo OAuth para YouTube Music con Google Device Flow."""
+    data = request.get_json() or {}
+    client_id = data.get("client_id", "").strip()
+    client_secret = data.get("client_secret", "").strip()
+
+    if not client_id or not client_secret:
+        return jsonify({
+            "success": False,
+            "error": "Debes introducir tanto el Client ID como el Client Secret de Google.",
+        }), 400
+
+    try:
+        flow_data = iniciar_flujo_oauth(client_id, client_secret)
+        import uuid
+        session_id = uuid.uuid4().hex[:12]
+        OAUTH_FLOWS[session_id] = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "device_code": flow_data["device_code"],
+            "user_code": flow_data["user_code"],
+            "expires_at": time.time() + flow_data.get("expires_in", 1800),
+            "interval": flow_data.get("interval", 5),
+        }
+
+        return jsonify({
+            "success": True,
+            "session_id": session_id,
+            "user_code": flow_data["user_code"],
+            "verification_url": flow_data["verification_url"],
+            "direct_url": flow_data["direct_url"],
+            "interval": flow_data.get("interval", 5),
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error al contactar con Google OAuth: {str(e)}"}), 500
+
+
+@app.route("/api/oauth/check/<session_id>", methods=["GET"])
+def api_oauth_check(session_id):
+    """Comprueba si el usuario ha autorizado la app en Google."""
+    flow = OAUTH_FLOWS.get(session_id)
+    if not flow:
+        return jsonify({"success": False, "status": "error", "error": "Sesión OAuth expirada o inexistente."}), 404
+
+    if time.time() > flow["expires_at"]:
+        del OAUTH_FLOWS[session_id]
+        return jsonify({"success": False, "status": "error", "error": "El código ha caducado. Vuelve a iniciar el flujo."}), 400
+
+    ruta_oauth = os.path.join(DATA_DIR, "oauth.json")
+    status, error_msg = comprobar_token_oauth(
+        client_id=flow["client_id"],
+        client_secret=flow["client_secret"],
+        device_code=flow["device_code"],
+        ruta_guardado=ruta_oauth,
+    )
+
+    if status == "success":
+        del OAUTH_FLOWS[session_id]
+        ok, msg = verificar_autenticacion_ytm(ruta_oauth)
+        return jsonify({
+            "success": True,
+            "status": "success",
+            "message": "¡Vinculación OAuth con Google completada con éxito! Tus credenciales se renovarán automáticamente.",
+            "auth_file": "oauth.json",
+        })
+    elif status == "pending":
+        return jsonify({
+            "success": True,
+            "status": "pending",
+        })
+    else:
+        del OAUTH_FLOWS[session_id]
+        return jsonify({
+            "success": False,
+            "status": "error",
+            "error": error_msg or "Error en la autorización.",
+        }), 400
 
 
 @app.route("/api/fetch-url", methods=["POST"])

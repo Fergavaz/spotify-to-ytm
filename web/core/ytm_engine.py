@@ -3,11 +3,13 @@ Motor de interacción con YouTube Music (ytmusicapi).
 Maneja autenticación, búsqueda multietapa con fallback, sincronización y chunking.
 """
 
+import json
 import os
 import re
 import time
 from typing import Callable, Optional
 from ytmusicapi import YTMusic
+from ytmusicapi.auth.oauth import OAuthCredentials
 from core.normalizer import clave, coincide, normalizar
 
 MAX_CANCIONES_LISTA_YTM = 5000
@@ -18,13 +20,13 @@ PAUSA_BUSQUEDA = 0.25
 def encontrar_archivo_auth(directorio_base: str) -> Optional[str]:
     """
     Busca un archivo de autenticación válido en el directorio base o en la ruta global.
-    Prioridad: variable de entorno YTM_AUTH_FILE, headers_auth.json, browser.json, oauth.json.
+    Prioridad: variable de entorno YTM_AUTH_FILE, oauth.json, headers_auth.json, browser.json.
     """
     env_auth = os.environ.get("YTM_AUTH_FILE")
     if env_auth and os.path.exists(env_auth) and os.path.getsize(env_auth) > 20:
         return env_auth
 
-    nombres = ["headers_auth.json", "browser.json", "oauth.json"]
+    nombres = ["oauth.json", "headers_auth.json", "browser.json"]
     for nombre in nombres:
         ruta = os.path.join(directorio_base, nombre)
         if os.path.exists(ruta) and os.path.getsize(ruta) > 20:
@@ -40,9 +42,22 @@ def encontrar_archivo_auth(directorio_base: str) -> Optional[str]:
 
 
 def obtener_cliente_ytm(ruta_auth: str) -> YTMusic:
-    """Instancia y devuelve el cliente de YTMusic."""
+    """Instancia y devuelve el cliente de YTMusic (soporta tanto OAuth como cookies)."""
     if not os.path.exists(ruta_auth):
         raise FileNotFoundError(f"No existe el archivo de autenticación: {ruta_auth}")
+
+    try:
+        with open(ruta_auth, "r", encoding="utf-8") as f:
+            datos = json.load(f)
+        if isinstance(datos, dict) and "refresh_token" in datos:
+            cid = datos.get("client_id")
+            csec = datos.get("client_secret")
+            if cid and csec:
+                creds = OAuthCredentials(client_id=cid, client_secret=csec)
+                return YTMusic(ruta_auth, oauth_credentials=creds)
+    except Exception:
+        pass
+
     return YTMusic(ruta_auth)
 
 
@@ -52,7 +67,7 @@ def verificar_autenticacion_ytm(ruta_auth: str) -> tuple[bool, str]:
     Comprueba permisos de lectura y estado de sesión activa.
     """
     try:
-        yt = YTMusic(ruta_auth)
+        yt = obtener_cliente_ytm(ruta_auth)
         # Comprobar llamada autenticada para detectar tokens o cookies expiradas (Error 401)
         try:
             yt.get_history()
@@ -63,6 +78,81 @@ def verificar_autenticacion_ytm(ruta_auth: str) -> tuple[bool, str]:
         return True, "Conectado correctamente a YouTube Music."
     except Exception as e:
         return False, f"Error de autenticación en YouTube Music: {str(e)}"
+
+
+def iniciar_flujo_oauth(client_id: str, client_secret: str) -> dict:
+    """
+    Inicia el flujo de autenticación OAuth para dispositivos Google TV / Limited Input.
+    Devuelve los códigos y URL de verificación.
+    """
+    creds = OAuthCredentials(client_id=client_id, client_secret=client_secret)
+    code_data = creds.get_code()
+    if "error" in code_data:
+        raise RuntimeError(f"Google OAuth error: {code_data.get('error')}")
+
+    user_code = code_data.get("user_code")
+    verification_url = code_data.get("verification_url", "https://www.google.com/device")
+    direct_url = f"{verification_url}?user_code={user_code}" if user_code else verification_url
+    return {
+        "device_code": code_data.get("device_code"),
+        "user_code": user_code,
+        "verification_url": verification_url,
+        "direct_url": direct_url,
+        "expires_in": code_data.get("expires_in", 1800),
+        "interval": code_data.get("interval", 5),
+    }
+
+
+def comprobar_token_oauth(
+    client_id: str, client_secret: str, device_code: str, ruta_guardado: str
+) -> tuple[str, Optional[str]]:
+    """
+    Comprueba si el usuario ha completado la autorización en Google.
+    Devuelve (estado, mensaje_error):
+      - 'pending', None: Aún esperando autorización
+      - 'success', None: Autorizado y guardado con éxito
+      - 'error', mensaje: Error o rechazo
+    """
+    creds = OAuthCredentials(client_id=client_id, client_secret=client_secret)
+    try:
+        res = creds.token_from_code(device_code)
+    except Exception as e:
+        return "error", str(e)
+
+    if not isinstance(res, dict):
+        return "error", "Respuesta inesperada del servidor de Google."
+
+    if "error" in res:
+        err = res["error"]
+        if err in ("authorization_pending", "slow_down"):
+            return "pending", None
+        elif err == "access_denied":
+            return "error", "Acceso denegado por el usuario en Google."
+        elif err == "expired_token":
+            return "error", "El código de verificación ha caducado. Vuelve a intentarlo."
+        else:
+            return "error", f"Error de Google OAuth: {err}"
+
+    if "access_token" in res and "refresh_token" in res:
+        try:
+            token_data = {
+                "access_token": res["access_token"],
+                "refresh_token": res["refresh_token"],
+                "scope": res.get("scope", "https://www.googleapis.com/auth/youtube"),
+                "token_type": res.get("token_type", "Bearer"),
+                "expires_at": int(time.time() + res.get("expires_in", 3600)),
+                "expires_in": res.get("expires_in", 3600),
+                "client_id": client_id,
+                "client_secret": client_secret,
+            }
+            os.makedirs(os.path.dirname(ruta_guardado), exist_ok=True)
+            with open(ruta_guardado, "w", encoding="utf-8") as f:
+                json.dump(token_data, f, indent=2)
+            return "success", None
+        except Exception as e:
+            return "error", f"Error al guardar oauth.json: {str(e)}"
+
+    return "pending", None
 
 
 def en_lotes(lista: list, tam: int = LOTE_API):
