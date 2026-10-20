@@ -55,13 +55,19 @@ spotify-to-ytm/
 ## 3. Módulos y Lógica del Motor Backend (`web/core/`)
 
 ### 3.1. Normalización y Coincidencia Difusa (`core/normalizer.py`)
-YouTube Music y Spotify titulan las canciones de manera dispar (presencia de etiquetas `(Remastered 2021)`, `[Official Music Video]`, `feat. Artista`, o formato `Artista - Título`).
+YouTube Music y Spotify titulan las canciones y listan a los artistas de manera dispar (presencia de etiquetas `(Remastered 2021)`, `[Official Music Video]`, `feat. Artista`, títulos bilingües con paréntesis, diferente orden en colaboraciones de varios artistas, o videoclips subidos por canales de fans donde el artista real está en el título).
 * **`limpiar_cadena(texto)`**: Convierte a minúsculas, elimina tildes/acentos y caracteres no alfanuméricos.
 * **`normalizar(titulo)`**: Utiliza expresiones regulares para suprimir sufijos innecesarios (`(feat. ...)`, `[video oficial]`, `remastered`, `lyrics`, `live`, etc.).
-* **`coincide(clave_a, clave_b, raw_a, raw_b)`**:
-  - Aplica comparación estricta de tuplas normalizadas `(titulo_limpio, artista_limpio)`.
-  - Si no coincide exactamente, aplica `difflib.SequenceMatcher(None, tit_a, tit_b).ratio() >= 0.82` o inclusión de subcadenas mayores a 4 caracteres.
-  - Genera candidatos desglosando títulos que contienen guiones (`Artista - Título`) para probar combinaciones invertidas.
+* **`normalizar_candidatos(texto)`**: Genera múltiples variantes limpias de un título:
+  - Título íntegro normalizado.
+  - Partes separadas por guion (`Artista - Canción` o viceversa).
+  - Títulos bilingües entre paréntesis (ej: `Suerte (Whenever, Wherever)` -> `['suerte', 'whenever wherever']`).
+* **`canciones_coinciden(t_a, t_b)`**:
+  - Función central de comparación entre diccionarios de canciones (`{'titulo': ..., 'artistas': [...]}`).
+  - **Coincidencia de títulos**: Compara exhaustivamente todos los candidatos de `t_a` contra `t_b` usando igualdad, umbral de similitud difusa (`difflib >= 0.82`) o inclusión de subcadena (>= 4 caracteres).
+  - **Cruce bidireccional entre artistas**: Si una pista tiene varios artistas colaboradores, evalúa si **cualquier** artista de A coincide o tiene similitud (`>= 0.80`) con **cualquier** artista de B. Esto resuelve discrepancias en el orden de los créditos (ej: `['Wisin', 'Camilo', 'Los Legendarios']` vs `['Los Legendarios', 'Wisin', 'Camilo']`).
+  - **Detección de artista en título de videoclip**: Si una canción de YouTube fue subida por un canal o uploader de terceros (ej: artista `MundoLetras` o `Silvia Zc`), comprueba si el artista oficial de Spotify aparece dentro del título del vídeo en YouTube (ej: `"OnMusic - Tu Energia Sana"` contiene `"onmusic"`).
+* **`coincide(clave_a, clave_b, raw_a, raw_b)`**: Compatibilidad heredada para tuplas directas.
 
 ### 3.2. Extractor de Spotify (`core/spotify_reader.py`)
 Permite leer listas públicas sin credenciales de pago:
@@ -89,7 +95,8 @@ Utiliza la librería `ytmusicapi` para gestionar la biblioteca de YouTube Music:
   - Si una lista supera este límite, el motor detecta el espacio libre y crea listas correlativas (`Nombre`, `Nombre 2`, `Nombre 3`...).
 * **Simulación y Análisis Previo (`planificar_transferencia`)**:
   - Se ejecuta antes de tocar la cuenta de YouTube Music.
-  - Compara la lista de Spotify contra las playlists existentes en YouTube Music.
+  - Compara la lista de Spotify contra las playlists existentes en YouTube Music usando `canciones_coinciden`.
+  - Tolera duplicados existentes en YouTube Music (emparejando cualquier copia con la pista de Spotify sin marcarlas como canciones extrañas).
   - Calcula:
     - Canciones que se añadirán a YouTube Music.
     - Canciones en común (ya presentes en YTM, para omitirlas y no duplicar).
@@ -163,9 +170,11 @@ Tu objetivo es crear una suite completa para transferir y sincronizar playlists 
      b) Google Device OAuth (`oauth.json`), implementando un modal de verificación interactivo.
    - Implementa un verificador de autenticación activo que llame a `get_library_playlists(limit=1)` y priorice el método que realmente funcione sin error 400.
 
-3. **Algoritmo de Normalización y Coincidencia Inteligente**:
+3. **Algoritmo de Normalización y Coincidencia Inteligente (`canciones_coinciden`)**:
    - Implementa un normalizador de títulos y artistas que elimine sufijos como "(Remastered)", "(Live)", "(Official Video)", "feat.", etc.
-   - Aplica fuzzy matching con `difflib.SequenceMatcher` (umbral >= 0.82) y manejo de candidatos invertidos ("Artista - Título").
+   - Aplica fuzzy matching con `difflib.SequenceMatcher` (umbral >= 0.82), desglose de candidatos invertidos ("Artista - Título") y títulos bilingües entre paréntesis (ej: `Suerte (Whenever, Wherever)`).
+   - Cruce bidireccional entre la lista completa de artistas para admitir diferencias en el orden de créditos (`['Artista A', 'Artista B']` vs `['Artista B', 'Artista A']`).
+   - Detección del nombre de artistas oficiales embebidos en el título del videoclip para cuando el canal uploader de YouTube Music no coincide con el artista.
    - Búsqueda multietapa en YouTube Music: primero canciones oficiales (`songs`), luego variaciones sin signos de puntuación, y finalmente fallback a videoclips (`videos`).
 
 4. **Sincronización Inteligente Bidireccional y Plan Previo**:

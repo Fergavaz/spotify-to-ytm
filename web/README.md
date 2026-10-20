@@ -10,7 +10,8 @@ Aplicación Web moderna y responsive para transferir y sincronizar playlists de 
   1. **Enlace Directo (URL)**: Pega cualquier URL pública de playlist de Spotify (soporta listas de más de 100 canciones).
   2. **Búsqueda por Usuario**: Introduce un nombre de usuario o enlace de perfil para descubrir y seleccionar sus playlists públicas interactivamente.
   3. **Subida de CSV**: Compatible con exportaciones de herramientas como Exportify, Soundiiz, Spotlistr, TuneMyMusic.
-- **Sincronización Inteligente**: Comprueba si la lista ya existe en tu cuenta de YouTube Music y transfiere únicamente las canciones que faltan, evitando duplicados.
+- **Sincronización Inteligente Bidireccional**: Comprueba si la lista ya existe en tu cuenta de YouTube Music y transfiere únicamente las canciones que faltan, evitando duplicados. Detecta canciones exclusivas de YouTube Music y genera accesos directos para agregarlas a Spotify.
+- **Emparejamiento Difuso de Pistas**: Coincidencia inteligente multietapa entre títulos y artistas (`canciones_coinciden`), tolerando distinto orden de colaboradores, títulos bilingües con paréntesis y vídeos oficiales de YouTube subidos por canales uploader.
 - **División Automática a 5.000 Canciones**: Respeta el límite máximo por lista de YouTube Music fragmentando listas grandes en "MiLista", "MiLista 2", etc.
 - **Búsqueda Multietapa con Fallback a Vídeos Oficiales**: Si una canción indie no está catalogada como pista de audio en YouTube Music, el motor busca automáticamente su videoclip oficial correspondiente.
 - **Monitor en Tiempo Real**: Barra de progreso animada, contadores de métricas en directo y consola de logs en vivo mientras se realiza la transferencia en segundo plano.

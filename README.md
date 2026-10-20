@@ -19,7 +19,11 @@ Disponible en dos modalidades independientes:
   - O busca por nombre de usuario de Spotify y explora interactivamente sus listas públicas.
   - O sube un archivo CSV (compatible con Exportify, Soundiiz, Spotlistr, TuneMyMusic).
   - Soporte opcional para la API oficial de desarrolladores de Spotify.
-- **Sincronización Inteligente**: Compara las canciones de tu lista de Spotify con las ya existentes en YouTube Music y añade únicamente las que faltan, evitando duplicados.
+- **Sincronización Inteligente Bidireccional**: Compara las canciones de tu lista de Spotify con las ya existentes en YouTube Music y añade únicamente las que faltan, evitando duplicados. Además, detecta canciones presentes en YouTube Music que no están en Spotify, facilitando enlaces directos de búsqueda rápida para añadirlas a Spotify en un clic.
+- **Coincidencia Difusa Avanzada (`canciones_coinciden`)**:
+  - Cruza todos los colaboradores y artistas para resolver diferencias en el orden de créditos entre plataformas.
+  - Detecta el artista real cuando en YouTube Music figura como canal uploader un tercero (formato `Artista - Canción`).
+  - Desglosa títulos alternativos y bilingües con paréntesis como `Suerte (Whenever, Wherever)`.
 - **División Automática a 5.000 Canciones**: Respeta el límite máximo por lista de YouTube Music fragmentando playlists grandes en listas numeradas: `"MiLista"`, `"MiLista 2"`, etc.
 - **Búsqueda Multietapa con Fallback a Vídeos Oficiales**: Si una pista indie no aparece en el catálogo de audio (`songs`), busca automáticamente su videoclip oficial correspondiente (`videos`).
 - **Informes CSV de Diferencias**: Genera listados detallados con las canciones transferidas, no encontradas o exclusivas de cada plataforma.
@@ -171,14 +175,19 @@ El script te ofrecerá un menú interactivo:
 
 ## 🧠 Algoritmo de Normalización y Búsqueda
 
-El sistema no realiza búsquedas literales rígidas, sino que implementa una canalización en varias etapas:
+El sistema no realiza búsquedas literales rígidas ni comparaciones simplistas de texto, sino que implementa una canalización inteligente en varias etapas:
 
 1. **Limpieza y Normalización**:
-   - Elimina acentos, puntuaciones irrelevantes y cadenas accesorias (`feat.`, `Remastered`, `Live`, `Bonus Track`, `Deluxe Edition`).
+   - Elimina acentos, puntuaciones irrelevantes y cadenas accesorias (`feat.`, `Remastered`, `Live`, `Bonus Track`, `Deluxe Edition`, `Official Video`, `Letra`, `Lyrics`).
    - Normaliza variantes ortográficas (`¿ ? ¡ !`).
-2. **Búsqueda en Catálogo de Pistas (`songs`)**:
-   - Comprueba la coincidencia difusa entre el título y el artista con un umbral del 88% de similitud.
-3. **Fallback a Videoclips Oficiales (`videos`)**:
+   - Desglosa candidatos para títulos bilingües entre paréntesis (ej: `Suerte (Whenever, Wherever)`) y formatos invertidos con guión (`Artista - Título`).
+2. **Emparejamiento de Canciones Multiatributo (`canciones_coinciden`)**:
+   - **Títulos**: Evalúa similitud difusa (`SequenceMatcher >= 0.82`) y coincidencias de subcadenas sobre todos los candidatos.
+   - **Artistas**: Comprobación cruzada entre **todos** los artistas acreditados en Spotify y YouTube Music, ignorando discrepancias en el orden de los créditos (ej: `[Wisin, Camilo]` vs `[Camilo, Wisin]`).
+   - **Uploaders y Canales**: Si una pista en YouTube Music fue subida por un canal de terceros, detecta si el artista oficial de Spotify está contenido dentro del título del videoclip.
+3. **Búsqueda en Catálogo de Pistas (`songs`)**:
+   - Comprueba la coincidencia difusa en el catálogo oficial de canciones de YouTube Music.
+4. **Fallback a Videoclips Oficiales (`videos`)**:
    - Muchas canciones independientes o ediciones especiales están catalogadas en YouTube Music como videoclips oficiales. Si la búsqueda en `songs` no arroja resultado, el motor realiza automáticamente una segunda pasada en `videos`.
 
 ---
