@@ -999,6 +999,12 @@ def main() -> None:
         if solo_sp:
             guardar_csv("solo_en_spotify.csv", solo_sp)
             print("   📄 Informe guardado: solo_en_spotify.csv")
+            print("\n🔍 Canciones que se van a añadir a YouTube Music:")
+            for idx, c in enumerate(solo_sp[:15], 1):
+                arts = ", ".join(c["artistas"])
+                print(f"   ➕ [{idx}] {c['titulo']} — {arts}")
+            if len(solo_sp) > 15:
+                print(f"   ... y {len(solo_sp) - 15} canciones más.")
         if solo_ytm:
             guardar_csv("solo_en_youtube_music.csv", solo_ytm)
             print("   📄 Informe guardado: solo_en_youtube_music.csv")
@@ -1009,8 +1015,14 @@ def main() -> None:
 
         canciones_a_buscar = solo_sp
     else:
-        print("   No se encontró ninguna lista con ese nombre en YTM.")
-        print("   Se creará una nueva.")
+        print(f"   No se encontró ninguna lista con el nombre '{nombre_playlist}' en YTM.")
+        print(f"   Se creará una nueva lista con las {len(canciones_sp)} canciones.")
+        print("\n🔍 Canciones que se añadirán a la nueva lista:")
+        for idx, c in enumerate(canciones_sp[:15], 1):
+            arts = ", ".join(c["artistas"])
+            print(f"   ➕ [{idx}] {c['titulo']} — {arts}")
+        if len(canciones_sp) > 15:
+            print(f"   ... y {len(canciones_sp) - 15} canciones más.")
         canciones_a_buscar = canciones_sp
 
     # ── Confirmación del usuario ──

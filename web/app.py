@@ -22,6 +22,7 @@ from core.ytm_engine import (
     verificar_autenticacion_ytm,
     iniciar_flujo_oauth,
     comprobar_token_oauth,
+    planificar_transferencia,
 )
 from core.job_runner import (
     crear_tarea,
@@ -370,6 +371,44 @@ def api_upload_csv():
         })
     except Exception as e:
         return jsonify({"success": False, "error": f"Error al procesar el archivo CSV: {str(e)}"}), 500
+
+
+@app.route("/api/plan-transfer", methods=["POST"])
+def api_plan_transfer():
+    """Analiza y devuelve qué se hará en YouTube Music antes de transferir."""
+    data = request.get_json() or {}
+    nombre = data.get("playlist_name", "").strip()
+    canciones = data.get("tracks", [])
+    modo_sync = bool(data.get("sync_mode", True))
+
+    if not nombre:
+        return jsonify({"success": False, "error": "Introduce un nombre de playlist."}), 400
+    if not canciones:
+        return jsonify({"success": False, "error": "No hay canciones cargadas para analizar."}), 400
+
+    ruta_auth = encontrar_archivo_auth(DATA_DIR)
+    if not ruta_auth:
+        return jsonify({
+            "success": False,
+            "auth_ok": False,
+            "error": "YouTube Music no está autenticado. Conéctalo desde 'Configurar YTM' para simular la transferencia.",
+        }), 400
+
+    try:
+        from ytmusicapi import YTMusic
+        yt = YTMusic(ruta_auth)
+        plan = planificar_transferencia(yt, nombre, canciones, modo_sync)
+        return jsonify({
+            "success": True,
+            "auth_ok": True,
+            "plan": plan,
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "auth_ok": True,
+            "error": f"Error al analizar YouTube Music: {str(e)}",
+        }), 500
 
 
 @app.route("/api/start-transfer", methods=["POST"])

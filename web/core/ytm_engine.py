@@ -258,6 +258,86 @@ def diferencia_canciones(origen: list[dict], destino: list[dict]) -> list[dict]:
     return faltan
 
 
+def planificar_transferencia(
+    yt: YTMusic,
+    nombre_playlist: str,
+    canciones_spotify: list[dict],
+    modo_sync: bool,
+) -> dict:
+    """
+    Simula y analiza qué ocurrirá en YouTube Music antes de ejecutar la transferencia:
+    - Si existe una o más listas coincidentes y modo_sync está activado:
+      Calcula exactamente qué canciones faltan y cuáles ya están presentes.
+    - Si no existe lista: indica que se creará una nueva y se añadirán todas.
+    """
+    nombre_limpio = nombre_playlist.strip()
+    listas_existentes = buscar_listas_ytm(yt, nombre_limpio)
+
+    if listas_existentes and modo_sync:
+        canciones_ytm = obtener_canciones_ytm(yt, listas_existentes)
+        claves_ytm = [clave(t["titulo"], t["artistas"]) for t in canciones_ytm]
+
+        canciones_a_anadir = []
+        canciones_ya_en_ytm = []
+        for t in canciones_spotify:
+            k = clave(t["titulo"], t["artistas"])
+            if any(coincide(k, c) for c in claves_ytm):
+                canciones_ya_en_ytm.append(t)
+            else:
+                canciones_a_anadir.append(t)
+
+        nombres_existentes = [p["title"] for p in listas_existentes]
+
+        if canciones_a_anadir:
+            msg = (
+                f"Se sincronizará con la playlist existente '{nombres_existentes[0]}' en YouTube Music. "
+                f"Se añadirán {len(canciones_a_anadir)} canciones nuevas y se omitirán {len(canciones_ya_en_ytm)} "
+                f"que ya están en tu lista."
+            )
+        else:
+            msg = (
+                f"¡Tu playlist '{nombres_existentes[0]}' en YouTube Music ya tiene todas las canciones de Spotify! "
+                f"No hace falta añadir ninguna canción nueva."
+            )
+
+        return {
+            "existe_en_ytm": True,
+            "tipo_accion": "sincronizar",
+            "listas_existentes": nombres_existentes,
+            "total_actual_ytm": len(canciones_ytm),
+            "total_spotify": len(canciones_spotify),
+            "total_a_anadir": len(canciones_a_anadir),
+            "total_ya_existentes": len(canciones_ya_en_ytm),
+            "canciones_a_anadir": canciones_a_anadir,
+            "canciones_ya_existentes": canciones_ya_en_ytm,
+            "mensaje": msg,
+        }
+    else:
+        if listas_existentes:
+            msg = (
+                f"Modo sincronización desactivado. Aunque ya existe '{nombre_limpio}', se creará una "
+                f"nueva lista independiente en YouTube Music con las {len(canciones_spotify)} canciones."
+            )
+        else:
+            msg = (
+                f"No existe ninguna playlist llamada '{nombre_limpio}' en tu biblioteca de YouTube Music. "
+                f"Se creará como una nueva lista y se añadirán las {len(canciones_spotify)} canciones."
+            )
+
+        return {
+            "existe_en_ytm": bool(listas_existentes),
+            "tipo_accion": "crear_nueva",
+            "listas_existentes": [p["title"] for p in listas_existentes] if listas_existentes else [],
+            "total_actual_ytm": 0,
+            "total_spotify": len(canciones_spotify),
+            "total_a_anadir": len(canciones_spotify),
+            "total_ya_existentes": 0,
+            "canciones_a_anadir": canciones_spotify,
+            "canciones_ya_existentes": [],
+            "mensaje": msg,
+        }
+
+
 def calcular_nombre_lista(nombre_base: str, indice: int) -> str:
     """Genera el nombre de lista: 'MiLista', 'MiLista 2', 'MiLista 3'..."""
     if indice <= 1:

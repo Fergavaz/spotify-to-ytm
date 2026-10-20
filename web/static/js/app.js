@@ -33,10 +33,27 @@ const fileCsv = document.getElementById("file-csv");
 const previewSection = document.getElementById("preview-section");
 const inputTargetName = document.getElementById("input-target-name");
 const countNumber = document.getElementById("count-number");
-const accordionCount = document.getElementById("accordion-count");
-const tableTracksBody = document.getElementById("table-tracks-body");
 const switchSync = document.getElementById("switch-sync");
 const btnStartTransfer = document.getElementById("btn-start-transfer");
+
+// Plan Elements
+const btnRefreshPlan = document.getElementById("btn-refresh-plan");
+const spinnerPlan = document.getElementById("spinner-plan");
+const iconPlan = document.getElementById("icon-plan");
+const planResultAlert = document.getElementById("plan-result-alert");
+const planStatusIcon = document.getElementById("plan-status-icon");
+const planTitle = document.getElementById("plan-title");
+const planDescription = document.getElementById("plan-description");
+const planStatsContainer = document.getElementById("plan-stats-container");
+const planBadgeAction = document.getElementById("plan-badge-action");
+const planStatToAdd = document.getElementById("plan-stat-to-add");
+const planStatAlready = document.getElementById("plan-stat-already");
+const planListsAccordion = document.getElementById("plan-lists-accordion");
+const planDetailsCount = document.getElementById("plan-details-count");
+const planTracksBody = document.getElementById("plan-tracks-body");
+const pillCountAdd = document.getElementById("pill-count-add");
+const pillCountAlready = document.getElementById("pill-count-already");
+const pillCountAll = document.getElementById("pill-count-all");
 
 const monitorSection = document.getElementById("monitor-section");
 const transferProgressBar = document.getElementById("transfer-progress-bar");
@@ -91,38 +108,213 @@ function showToast(message, type = "info") {
 }
 
 // ── Display Tracks in Preview Section ────────────────────────────────────────
+let currentPlanData = null;
+let currentPlanFilter = "to_add";
+let planDebounceTimer = null;
+
 function displayTracksPreview(name, tracks) {
   currentPlaylistName = name;
   currentTracks = tracks;
 
   inputTargetName.value = name;
   countNumber.textContent = tracks.length;
-  accordionCount.textContent = tracks.length;
 
-  tableTracksBody.innerHTML = "";
-  tracks.slice(0, 100).forEach((t, i) => {
+  previewSection.classList.remove("d-none");
+  previewSection.scrollIntoView({ behavior: "smooth" });
+
+  // Disparar automáticamente el análisis previo con YouTube Music
+  fetchPlanTransfer();
+}
+
+async function fetchPlanTransfer() {
+  const targetName = inputTargetName.value.trim();
+  if (!targetName || !currentTracks.length) return;
+
+  if (spinnerPlan) spinnerPlan.classList.remove("d-none");
+  if (iconPlan) iconPlan.classList.add("d-none");
+  if (btnRefreshPlan) btnRefreshPlan.disabled = true;
+
+  planResultAlert.className = "alert alert-dark border-0 rounded-3 mb-3 d-flex align-items-start gap-3";
+  planStatusIcon.className = "fa-solid fa-circle-notch fa-spin text-primary fs-4 mt-1";
+  planTitle.textContent = "Analizando biblioteca de YouTube Music...";
+  planDescription.textContent = `Buscando si ya existe "${targetName}" y calculando diferencias de canciones...`;
+
+  try {
+    const resp = await fetch("/api/plan-transfer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playlist_name: targetName,
+        tracks: currentTracks,
+        sync_mode: switchSync.checked,
+      }),
+    });
+    const data = await resp.json();
+
+    if (!data.success) {
+      planResultAlert.className = "alert alert-warning border-0 rounded-3 mb-3 d-flex align-items-start gap-3";
+      planStatusIcon.className = "fa-solid fa-triangle-exclamation text-warning fs-4 mt-1";
+      planTitle.textContent = "Configuración de YouTube Music pendiente";
+      planDescription.textContent = data.error || "No se pudo realizar el análisis previo.";
+      planStatsContainer.classList.add("d-none");
+      planListsAccordion.classList.add("d-none");
+      return;
+    }
+
+    currentPlanData = data.plan;
+    renderPlanResult(data.plan);
+  } catch (e) {
+    planResultAlert.className = "alert alert-danger border-0 rounded-3 mb-3 d-flex align-items-start gap-3";
+    planStatusIcon.className = "fa-solid fa-circle-exclamation text-danger fs-4 mt-1";
+    planTitle.textContent = "Error de red";
+    planDescription.textContent = "No se pudo conectar con el servidor para simular la transferencia.";
+  } finally {
+    if (spinnerPlan) spinnerPlan.classList.add("d-none");
+    if (iconPlan) iconPlan.classList.remove("d-none");
+    if (btnRefreshPlan) btnRefreshPlan.disabled = false;
+  }
+}
+
+function renderPlanResult(plan) {
+  planStatsContainer.classList.remove("d-none");
+  planListsAccordion.classList.remove("d-none");
+
+  planStatToAdd.textContent = plan.total_a_anadir;
+  planStatAlready.textContent = plan.total_ya_existentes;
+  pillCountAdd.textContent = plan.total_a_anadir;
+  pillCountAlready.textContent = plan.total_ya_existentes;
+  pillCountAll.textContent = plan.total_spotify;
+
+  if (plan.tipo_accion === "sincronizar") {
+    planResultAlert.className = "alert alert-success border-0 bg-opacity-10 d-flex align-items-start gap-3 rounded-3 mb-3";
+    planStatusIcon.className = "fa-solid fa-arrows-rotate text-success fs-4 mt-1";
+    planTitle.textContent = `Playlist existente detectada: "${plan.listas_existentes[0]}"`;
+    planDescription.textContent = plan.mensaje;
+    planBadgeAction.innerHTML = '<span class="badge bg-warning text-dark"><i class="fa-solid fa-arrows-rotate me-1"></i>Sincronización</span>';
+  } else {
+    planResultAlert.className = "alert alert-info border-0 bg-opacity-10 d-flex align-items-start gap-3 rounded-3 mb-3";
+    planStatusIcon.className = "fa-solid fa-circle-plus text-info fs-4 mt-1";
+    planTitle.textContent = `Se creará una nueva lista: "${inputTargetName.value.trim()}"`;
+    planDescription.textContent = plan.mensaje;
+    planBadgeAction.innerHTML = '<span class="badge bg-success"><i class="fa-solid fa-plus me-1"></i>Crear Nueva</span>';
+  }
+
+  // Preseleccionar pestaña: si hay para añadir, esa; si ya están todas, ver las existentes
+  if (plan.total_a_anadir > 0) {
+    currentPlanFilter = "to_add";
+  } else {
+    currentPlanFilter = "already";
+  }
+  updatePlanFilterButtons();
+  renderPlanTracks();
+}
+
+function updatePlanFilterButtons() {
+  document.querySelectorAll(".plan-filter-btn").forEach((btn) => {
+    if (btn.dataset.filter === currentPlanFilter) {
+      btn.className = `btn btn-sm rounded-pill px-3 py-1 fw-semibold plan-filter-btn ${
+        currentPlanFilter === "to_add"
+          ? "btn-success"
+          : currentPlanFilter === "already"
+          ? "btn-info text-dark"
+          : "btn-secondary"
+      }`;
+    } else {
+      btn.className = `btn btn-sm rounded-pill px-3 py-1 fw-semibold plan-filter-btn ${
+        btn.dataset.filter === "to_add"
+          ? "btn-outline-success"
+          : btn.dataset.filter === "already"
+          ? "btn-outline-info"
+          : "btn-outline-secondary"
+      }`;
+    }
+  });
+}
+
+function renderPlanTracks() {
+  if (!currentPlanData) return;
+  planTracksBody.innerHTML = "";
+
+  let list = [];
+  if (currentPlanFilter === "to_add") {
+    list = currentPlanData.canciones_a_anadir || [];
+    planDetailsCount.textContent = `${list.length} canciones nuevas`;
+  } else if (currentPlanFilter === "already") {
+    list = currentPlanData.canciones_ya_existentes || [];
+    planDetailsCount.textContent = `${list.length} ya existentes`;
+  } else {
+    list = currentTracks;
+    planDetailsCount.textContent = `${list.length} canciones en total`;
+  }
+
+  if (list.length === 0) {
     const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="4" class="text-center text-secondary py-3">No hay canciones en esta categoría.</td>`;
+    planTracksBody.appendChild(tr);
+    return;
+  }
+
+  const toAddSet = new Set(
+    (currentPlanData.canciones_a_anadir || []).map((t) => (t.titulo || "").toLowerCase().trim())
+  );
+
+  list.slice(0, 150).forEach((t, i) => {
+    const isToAdd = toAddSet.has((t.titulo || "").toLowerCase().trim());
+    const tr = document.createElement("tr");
+    const badgeHtml = isToAdd
+      ? '<span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-2 py-1"><i class="fa-solid fa-plus me-1"></i>Se añadirá</span>'
+      : '<span class="badge bg-secondary bg-opacity-25 text-secondary border border-secondary border-opacity-50 px-2 py-1"><i class="fa-solid fa-check me-1"></i>Ya en YTM</span>';
+
     tr.innerHTML = `
       <td class="text-secondary small">${i + 1}</td>
       <td class="fw-semibold text-light">${escapeHtml(t.titulo)}</td>
       <td class="text-secondary">${escapeHtml((t.artistas || []).join(", "))}</td>
+      <td class="text-end">${badgeHtml}</td>
     `;
-    tableTracksBody.appendChild(tr);
+    planTracksBody.appendChild(tr);
   });
 
-  if (tracks.length > 100) {
+  if (list.length > 150) {
     const trMore = document.createElement("tr");
     trMore.innerHTML = `
-      <td colspan="3" class="text-center text-secondary small py-2">
-        ... y ${tracks.length - 100} canciones más.
+      <td colspan="4" class="text-center text-secondary small py-2">
+        ... y ${list.length - 150} canciones más.
       </td>
     `;
-    tableTracksBody.appendChild(trMore);
+    planTracksBody.appendChild(trMore);
   }
-
-  previewSection.classList.remove("d-none");
-  previewSection.scrollIntoView({ behavior: "smooth" });
 }
+
+// Event Listeners para actualizar el plan
+if (inputTargetName) {
+  inputTargetName.addEventListener("input", () => {
+    clearTimeout(planDebounceTimer);
+    planDebounceTimer = setTimeout(() => {
+      fetchPlanTransfer();
+    }, 600);
+  });
+}
+
+if (switchSync) {
+  switchSync.addEventListener("change", () => {
+    fetchPlanTransfer();
+  });
+}
+
+if (btnRefreshPlan) {
+  btnRefreshPlan.addEventListener("click", () => {
+    fetchPlanTransfer();
+  });
+}
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".plan-filter-btn");
+  if (btn) {
+    currentPlanFilter = btn.dataset.filter;
+    updatePlanFilterButtons();
+    renderPlanTracks();
+  }
+});
 
 function escapeHtml(str) {
   if (!str) return "";
