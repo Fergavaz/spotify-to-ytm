@@ -23,6 +23,7 @@ from core.ytm_engine import (
     iniciar_flujo_oauth,
     comprobar_token_oauth,
     planificar_transferencia,
+    obtener_cliente_ytm,
 )
 from core.job_runner import (
     crear_tarea,
@@ -395,8 +396,7 @@ def api_plan_transfer():
         }), 400
 
     try:
-        from ytmusicapi import YTMusic
-        yt = YTMusic(ruta_auth)
+        yt = obtener_cliente_ytm(ruta_auth)
         plan = planificar_transferencia(yt, nombre, canciones, modo_sync)
         return jsonify({
             "success": True,
