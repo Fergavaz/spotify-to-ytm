@@ -85,7 +85,9 @@ def api_status():
 
 @app.route("/api/upload-auth", methods=["POST"])
 def api_upload_auth():
-    """Sube o actualiza el archivo de autenticación de YouTube Music."""
+    """Sube o actualiza el archivo de autenticación de YouTube Music (JSON, cabeceras en bruto o cURL)."""
+    destino = os.path.join(DATA_DIR, "headers_auth.json")
+
     if "file" in request.files:
         f = request.files["file"]
         if not f.filename:
@@ -97,13 +99,42 @@ def api_upload_auth():
         f.save(destino)
     elif request.is_json and "json_content" in request.json:
         contenido = request.json.get("json_content", "").strip()
+        if not contenido:
+            return jsonify({"success": False, "error": "El contenido está vacío."}), 400
+
+        parsed = None
+        # Intento 1: Es un JSON válido
         try:
             parsed = json.loads(contenido)
+            if isinstance(parsed, dict):
+                if "refresh_token" in parsed:
+                    destino = os.path.join(DATA_DIR, "oauth.json")
+                else:
+                    destino = os.path.join(DATA_DIR, "headers_auth.json")
+                with open(destino, "w", encoding="utf-8") as out:
+                    json.dump(parsed, out, indent=2)
+        except Exception:
+            parsed = None
+
+        # Intento 2: Es un comando cURL o cabeceras en bruto copiadas de DevTools
+        if parsed is None:
             destino = os.path.join(DATA_DIR, "headers_auth.json")
-            with open(destino, "w", encoding="utf-8") as out:
-                json.dump(parsed, out, indent=2)
-        except Exception as e:
-            return jsonify({"success": False, "error": f"JSON inválido: {str(e)}"}), 400
+            headers_text = contenido
+
+            # Si es un comando cURL copiado, extraer todas las cabeceras -H '...'
+            if contenido.startswith("curl") or "curl " in contenido[:20]:
+                h_matches = re.findall(r"-H\s+['\"]([^'\"]+)['\"]", contenido)
+                if h_matches:
+                    headers_text = "\n".join(h_matches)
+
+            try:
+                from ytmusicapi.auth.browser import setup_browser
+                setup_browser(filepath=destino, headers_raw=headers_text)
+            except Exception as e:
+                return jsonify({
+                    "success": False,
+                    "error": f"No se pudieron extraer las cabeceras requeridas. Asegúrate de copiar la petición 'browse' con sesión iniciada. Error: {str(e)}"
+                }), 400
     else:
         return jsonify({"success": False, "error": "Petición no válida."}), 400
 

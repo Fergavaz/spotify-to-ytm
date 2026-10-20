@@ -121,15 +121,17 @@ python -c "from ytmusicapi import YTMusic; YTMusic.setup_oauth(filepath='oauth.j
 ```
 Sigue las instrucciones en pantalla para iniciar sesión con Google y autorizar la aplicación.
 
-#### Método 2: Headers del Navegador
+#### Método 2: Headers del Navegador (headers_auth.json / browser.json)
 1. Inicia sesión en [music.youtube.com](https://music.youtube.com).
-2. Abre la consola de desarrollo del navegador (`F12`) y ve a la pestaña **Red (Network)**.
-3. Filtra por `browse` y copia las cabeceras de la petición como cURL.
-4. Ejecuta:
+2. Abre la consola de desarrollo del navegador (<kbd>F12</kbd> o clic derecho → *Inspeccionar*) y ve a la pestaña **Red (Network)**.
+3. En la casilla de filtro escribe `browse`.
+4. En YouTube Music pulsa en **"Biblioteca"** o **"Explorar"**.
+5. Clic derecho en la petición `browse` → **Copiar** → **Copiar como cURL** (o *Copiar cabeceras de solicitud*).
+6. Puedes pegar directamente ese texto copiado en la **versión Web** (pestaña *Pegar Cabeceras o cURL*), o si usas el script CLI ejecutar:
    ```bash
    python -c "from ytmusicapi import YTMusic; YTMusic.setup(filepath='headers_auth.json')"
    ```
-   y pega las cabeceras solicitadas.
+   y pegar las cabeceras solicitadas en la terminal.
 
 ---
 

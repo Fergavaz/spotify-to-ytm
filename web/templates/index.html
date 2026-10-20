@@ -346,13 +346,15 @@
               </button>
             </li>
             <li class="nav-item" role="presentation">
+              <button class="nav-link text-light" id="tab-auth-paste-btn" data-bs-toggle="tab" data-bs-target="#tab-auth-paste" type="button" role="tab">Pegar Cabeceras o cURL</button>
+            </li>
+            <li class="nav-item" role="presentation">
               <button class="nav-link text-light" id="tab-auth-upload-btn" data-bs-toggle="tab" data-bs-target="#tab-auth-upload" type="button" role="tab">Subir Archivo JSON</button>
             </li>
             <li class="nav-item" role="presentation">
-              <button class="nav-link text-light" id="tab-auth-paste-btn" data-bs-toggle="tab" data-bs-target="#tab-auth-paste" type="button" role="tab">Pegar Texto JSON</button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link text-light" id="tab-auth-help-btn" data-bs-toggle="tab" data-bs-target="#tab-auth-help" type="button" role="tab">Ayuda</button>
+              <button class="nav-link text-light" id="tab-auth-help-btn" data-bs-toggle="tab" data-bs-target="#tab-auth-help" type="button" role="tab">
+                <i class="fa-solid fa-book-open text-warning me-1"></i> Guía Detallada
+              </button>
             </li>
           </ul>
 
@@ -389,9 +391,10 @@
                   <ol class="mt-2 mb-0 ps-3">
                     <li>Entra en <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-danger fw-semibold">Google Cloud Console</a> y crea un proyecto.</li>
                     <li>En la biblioteca de APIs, habilita <strong>YouTube Data API v3</strong>.</li>
+                    <li>Ve a <strong>Pantalla de consentimiento de OAuth</strong> y en <em>Usuarios de prueba</em> añade tu cuenta de correo de Google.</li>
                     <li>Ve a <strong>Credenciales</strong> → <strong>Crear credenciales</strong> → <strong>ID de cliente de OAuth</strong>.</li>
                     <li>Elige Tipo de aplicación: <strong>TV y dispositivos de entrada limitada</strong> (TVs and Limited Input devices).</li>
-                    <li>Copia el Client ID y Client Secret y pégalos aquí arriba (o defínelos en tu archivo <code>docker-compose.yml</code>).</li>
+                    <li>Copia el Client ID y Client Secret y pégalos aquí arriba.</li>
                   </ol>
                 </div>
                 {% endif %}
@@ -423,10 +426,30 @@
               </div>
             </div>
 
-            <!-- TAB 2: UPLOAD JSON -->
+            <!-- TAB 2: PEGAR CABECERAS O CURL -->
+            <div class="tab-pane fade" id="tab-auth-paste" role="tabpanel">
+              <p class="text-secondary small mb-2">
+                Pega directamente el comando <strong>cURL</strong> o las <strong>cabeceras de solicitud</strong> copiadas de la consola de tu navegador. El conversor las procesará y normalizará automáticamente.
+              </p>
+              <div class="mb-3">
+                <textarea class="form-control bg-black text-light border-secondary border-opacity-25 font-monospace small" id="textarea-auth-json" rows="8" placeholder="Pega aquí el comando cURL, el bloque de cabeceras o un JSON:
+curl 'https://music.youtube.com/youtubei/v1/browse' -H 'cookie: ...' ..."></textarea>
+              </div>
+              <div class="d-flex align-items-center justify-content-between">
+                <button id="btn-save-auth-text" class="btn btn-danger fw-semibold px-4 rounded-pill">
+                  <span class="spinner-border spinner-border-sm d-none" id="spinner-auth-text"></span>
+                  Convertir, Guardar y Validar
+                </button>
+                <button class="btn btn-link text-warning text-decoration-none small" type="button" onclick="document.getElementById('tab-auth-help-btn').click();">
+                  <i class="fa-solid fa-circle-info me-1"></i> ¿Cómo copiar estas cabeceras?
+                </button>
+              </div>
+            </div>
+
+            <!-- TAB 3: SUBIR ARCHIVO JSON -->
             <div class="tab-pane fade" id="tab-auth-upload" role="tabpanel">
               <div class="mb-3">
-                <label for="input-auth-file" class="form-label text-secondary small">Selecciona tu archivo <code>headers_auth.json</code> o <code>browser.json</code>:</label>
+                <label for="input-auth-file" class="form-label text-secondary small">Selecciona tu archivo <code>headers_auth.json</code>, <code>browser.json</code> u <code>oauth.json</code>:</label>
                 <input class="form-control bg-black text-light border-secondary border-opacity-25" type="file" id="input-auth-file" accept=".json">
               </div>
               <button id="btn-upload-auth-file" class="btn btn-danger fw-semibold px-4 rounded-pill">
@@ -435,28 +458,71 @@
               </button>
             </div>
 
-            <!-- Paste JSON -->
-            <div class="tab-pane fade" id="tab-auth-paste" role="tabpanel">
-              <div class="mb-3">
-                <label for="textarea-auth-json" class="form-label text-secondary small">Pega el contenido JSON de las cabeceras:</label>
-                <textarea class="form-control bg-black text-light border-secondary border-opacity-25 font-monospace small" id="textarea-auth-json" rows="8" placeholder='{ "cookie": "...", "x-goog-authuser": "0" }'></textarea>
-              </div>
-              <button id="btn-save-auth-text" class="btn btn-danger fw-semibold px-4 rounded-pill">
-                <span class="spinner-border spinner-border-sm d-none" id="spinner-auth-text"></span>
-                Guardar y Validar
-              </button>
-            </div>
-
-            <!-- Help Guide -->
+            <!-- TAB 4: GUÍA DETALLADA PASO A PASO -->
             <div class="tab-pane fade" id="tab-auth-help" role="tabpanel">
-              <ol class="small text-secondary ps-3 mb-0">
-                <li class="mb-2">Abre tu navegador (Chrome o Firefox) e inicia sesión en <a href="https://music.youtube.com" target="_blank" class="text-danger fw-semibold">music.youtube.com</a>.</li>
-                <li class="mb-2">Abre las Herramientas de Desarrollador (pulsa <kbd>F12</kbd> o clic derecho → <em>Inspeccionar</em>).</li>
-                <li class="mb-2">Ve a la pestaña <strong>Red (Network)</strong> y en el filtro pon <code>browse</code>.</li>
-                <li class="mb-2">Haz clic en cualquier enlace de YouTube Music (por ejemplo, "Explorar" o "Biblioteca").</li>
-                <li class="mb-2">Haz clic derecho en la petición <code>browse</code> que aparezca → <em>Copiar</em> → <em>Copiar como cURL</em> o <em>Copiar cabeceras de petición</em>.</li>
-                <li class="mb-2">Ejecuta en tu terminal el comando de configuración: <code>ytmusicapi browser</code> y pega las cabeceras solicitadas, o guárdalo como <code>headers_auth.json</code>.</li>
-              </ol>
+              <div class="p-3 bg-black rounded-3 border border-secondary border-opacity-25">
+                <h6 class="fw-bold text-light mb-3 d-flex align-items-center gap-2">
+                  <i class="fa-solid fa-network-wired text-info"></i> Cómo extraer las cabeceras de sesión de YouTube Music
+                </h6>
+
+                <div class="timeline-steps small text-secondary">
+                  <div class="d-flex gap-3 mb-3">
+                    <span class="badge bg-danger rounded-circle p-2 d-inline-flex justify-content-center align-items-center flex-shrink-0" style="width: 26px; height: 26px;">1</span>
+                    <div>
+                      <strong class="text-light">Abre YouTube Music en tu navegador</strong><br>
+                      Entra en <a href="https://music.youtube.com" target="_blank" class="text-danger fw-semibold">music.youtube.com</a> y asegúrate de haber iniciado sesión con tu cuenta de Google.
+                    </div>
+                  </div>
+
+                  <div class="d-flex gap-3 mb-3">
+                    <span class="badge bg-danger rounded-circle p-2 d-inline-flex justify-content-center align-items-center flex-shrink-0" style="width: 26px; height: 26px;">2</span>
+                    <div>
+                      <strong class="text-light">Abre las Herramientas de Desarrollador</strong><br>
+                      Pulsa la tecla <kbd>F12</kbd> (o clic derecho en cualquier parte de la página → <em>Inspeccionar</em>).
+                    </div>
+                  </div>
+
+                  <div class="d-flex gap-3 mb-3">
+                    <span class="badge bg-danger rounded-circle p-2 d-inline-flex justify-content-center align-items-center flex-shrink-0" style="width: 26px; height: 26px;">3</span>
+                    <div>
+                      <strong class="text-light">Filtra las peticiones de red</strong><br>
+                      Haz clic en la pestaña <strong>Red (Network)</strong> en la barra superior de la consola. En la casilla de filtro / búsqueda, escribe <code>browse</code>.
+                    </div>
+                  </div>
+
+                  <div class="d-flex gap-3 mb-3">
+                    <span class="badge bg-danger rounded-circle p-2 d-inline-flex justify-content-center align-items-center flex-shrink-0" style="width: 26px; height: 26px;">4</span>
+                    <div>
+                      <strong class="text-light">Genera actividad en la página</strong><br>
+                      En el menú lateral de YouTube Music, pulsa en <strong>"Biblioteca"</strong> o en <strong>"Explorar"</strong>. Verás aparecer inmediatamente una petición llamada <code>browse</code> (con estado 200).
+                    </div>
+                  </div>
+
+                  <div class="d-flex gap-3 mb-3">
+                    <span class="badge bg-danger rounded-circle p-2 d-inline-flex justify-content-center align-items-center flex-shrink-0" style="width: 26px; height: 26px;">5</span>
+                    <div>
+                      <strong class="text-light">Copia la petición</strong><br>
+                      Haz clic derecho sobre la fila <code>browse</code>:
+                      <ul class="mt-1 mb-1 ps-3">
+                        <li>En <strong>Google Chrome / Edge / Brave</strong>: Ve a <em>Copiar</em> → <strong>Copiar como cURL</strong> (o <em>Copiar cabeceras de solicitud</em>).</li>
+                        <li>En <strong>Mozilla Firefox</strong>: Ve a <em>Copiar</em> → <strong>Copiar como cURL</strong>.</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div class="d-flex gap-3">
+                    <span class="badge bg-success rounded-circle p-2 d-inline-flex justify-content-center align-items-center flex-shrink-0" style="width: 26px; height: 26px;">6</span>
+                    <div>
+                      <strong class="text-success">Pégalo en la aplicación</strong><br>
+                      Pasa a la pestaña <a href="#" onclick="document.getElementById('tab-auth-paste-btn').click();" class="text-info fw-semibold">Pegar Cabeceras o cURL</a>, pega el texto y pulsa <strong>Convertir, Guardar y Validar</strong>.
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mt-3 p-2 bg-secondary bg-opacity-10 rounded border border-secondary border-opacity-25 small text-secondary">
+                  <i class="fa-solid fa-shield-halved text-success me-1"></i> <strong>¿Para qué sirve esto?</strong> Las cabeceras contienen la cookie de sesión cifrada (<code>__Secure-3PAPISID</code>) que YouTube Music requiere para crear y sincronizar listas en tu cuenta privada.
+                </div>
+              </div>
             </div>
           </div>
 

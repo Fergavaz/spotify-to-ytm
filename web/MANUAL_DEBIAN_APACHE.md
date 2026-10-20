@@ -219,20 +219,44 @@ Si prefieres aislar completamente la aplicación en un contenedor Docker en Debi
 
 ## 🔐 Configuración de Autenticación de YouTube Music
 
-Para que el servidor web pueda crear y modificar tus listas de YouTube Music:
+Para que el servidor web o el contenedor Docker puedan gestionar tus listas de YouTube Music, dispones de dos métodos:
 
-### Opción A: Desde la interfaz web (Más sencilla)
-1. Abre la aplicación en tu navegador web.
-2. Pulsa en el botón superior **Configurar YTM** o en la alerta amarilla.
-3. Arrastra o selecciona tu archivo `headers_auth.json` o `browser.json`, o pega su contenido en la pestaña "Pegar Texto JSON".
-4. Pulsa **Subir y Validar**. El sistema comprobará la conexión al instante y mostrará el indicador en verde.
+### Método 1: Google OAuth (Recomendado y Permanente)
+1. En la web, pulsa en **Configurar YTM** → pestaña **Google OAuth**.
+2. Escribe tu Client ID y Client Secret de Google Cloud.
+3. Pulsa **Conectar con Google** y autoriza tu cuenta. El token se renovará automáticamente y nunca caducará.
 
-### Opción B: Copia directa en el servidor
-Si ya tienes el archivo generado (`headers_auth.json` o `browser.json`):
+---
+
+### Método 2: Cabeceras del Navegador (`headers_auth.json` / `browser.json`)
+Si no deseas crear credenciales de desarrollador en Google Cloud, puedes extraer las cabeceras de sesión de tu navegador en 1 minuto.
+
+#### 📋 Paso a paso para Google Chrome, Microsoft Edge y Brave:
+1. Abre tu navegador e inicia sesión en [music.youtube.com](https://music.youtube.com).
+2. Pulsa la tecla <kbd>F12</kbd> (o clic derecho en cualquier parte → *Inspeccionar*) para abrir las Herramientas de Desarrollador.
+3. Ve a la pestaña **Red** (o *Network* en inglés).
+4. En el campo de filtro o búsqueda escribe: `browse`.
+5. En la página de YouTube Music, haz clic en **"Biblioteca"** o en **"Explorar"** en el menú de la izquierda.
+6. Verás aparecer en la lista de red una petición llamada `browse` (con estado 200).
+7. Haz clic derecho sobre esa petición `browse`:
+   - En **Chrome / Brave**: Selecciona **Copiar** → **Copiar como cURL** (o *Copiar cabeceras de solicitud*).
+   - En **Edge**: Selecciona **Copiar** → **Copiar como cURL** (o *Copiar cabeceras de solicitud*).
+8. Vuelve a la aplicación web, abre el modal **Configurar YTM**, ve a la pestaña **Pegar Cabeceras o cURL**, pega el contenido y pulsa **Convertir, Guardar y Validar**. El conversor detectará automáticamente el formato y creará un archivo válido.
+
+#### 🦊 Paso a paso para Mozilla Firefox:
+1. Abre Firefox e inicia sesión en [music.youtube.com](https://music.youtube.com).
+2. Pulsa <kbd>F12</kbd> y selecciona la pestaña **Red** (*Network*).
+3. Escribe `browse` en el filtro.
+4. Pulsa en **Biblioteca** dentro de YouTube Music.
+5. Clic derecho en la petición `browse` → **Copiar** → **Copiar como cURL**.
+6. Pégalo en la pestaña **Pegar Cabeceras o cURL** de la web.
+
+#### 💻 Generación mediante terminal (Alternativa):
+Si prefieres generar el archivo con Python en tu terminal:
 ```bash
-sudo cp /ruta/headers_auth.json /var/www/spotify-to-ytm-web/headers_auth.json
-sudo chown www-data:www-data /var/www/spotify-to-ytm-web/headers_auth.json
+python -c "from ytmusicapi import YTMusic; YTMusic.setup(filepath='headers_auth.json')"
 ```
+Sigue las indicaciones de pantalla y pega las cabeceras copiadas. Luego copia el archivo `headers_auth.json` a la carpeta `data/` de la aplicación o del contenedor Docker.
 
 ---
 
