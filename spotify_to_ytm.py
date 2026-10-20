@@ -1008,6 +1008,14 @@ def main() -> None:
         if solo_ytm:
             guardar_csv("solo_en_youtube_music.csv", solo_ytm)
             print("   📄 Informe guardado: solo_en_youtube_music.csv")
+            print("\n⭐ Canciones en YouTube Music que NO están en Spotify:")
+            for idx, c in enumerate(solo_ytm[:10], 1):
+                arts = ", ".join(c["artistas"])
+                q = urllib.parse.quote(f"{c['titulo']} {arts}".strip())
+                print(f"   ⭐ [{idx}] {c['titulo']} — {arts}")
+                print(f"      🔗 Enlace para añadir en Spotify: https://open.spotify.com/search/{q}")
+            if len(solo_ytm) > 10:
+                print(f"   ... y {len(solo_ytm) - 10} canciones más (revisa solo_en_youtube_music.csv).")
 
         if not solo_sp:
             print("\n✅ ¡La lista de YouTube Music ya está completa! No faltan canciones.")

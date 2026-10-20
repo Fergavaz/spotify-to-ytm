@@ -53,7 +53,13 @@ const planDetailsCount = document.getElementById("plan-details-count");
 const planTracksBody = document.getElementById("plan-tracks-body");
 const pillCountAdd = document.getElementById("pill-count-add");
 const pillCountAlready = document.getElementById("pill-count-already");
+const pillCountYtmOnly = document.getElementById("pill-count-ytm-only");
 const pillCountAll = document.getElementById("pill-count-all");
+const planStatYtmOnly = document.getElementById("plan-stat-ytm-only");
+const ytmOnlyActions = document.getElementById("ytm-only-actions");
+const bannerYtmOnlyInfo = document.getElementById("banner-ytm-only-info");
+const btnCopyYtmOnly = document.getElementById("btn-copy-ytm-only");
+const btnDownloadYtmOnly = document.getElementById("btn-download-ytm-only");
 
 const monitorSection = document.getElementById("monitor-section");
 const transferProgressBar = document.getElementById("transfer-progress-bar");
@@ -181,8 +187,10 @@ function renderPlanResult(plan) {
 
   planStatToAdd.textContent = plan.total_a_anadir;
   planStatAlready.textContent = plan.total_ya_existentes;
+  if (planStatYtmOnly) planStatYtmOnly.textContent = plan.total_solo_en_ytm || 0;
   pillCountAdd.textContent = plan.total_a_anadir;
   pillCountAlready.textContent = plan.total_ya_existentes;
+  if (pillCountYtmOnly) pillCountYtmOnly.textContent = plan.total_solo_en_ytm || 0;
   pillCountAll.textContent = plan.total_spotify;
 
   if (plan.tipo_accion === "sincronizar") {
@@ -199,9 +207,11 @@ function renderPlanResult(plan) {
     planBadgeAction.innerHTML = '<span class="badge bg-success"><i class="fa-solid fa-plus me-1"></i>Crear Nueva</span>';
   }
 
-  // Preseleccionar pestaña: si hay para añadir, esa; si ya están todas, ver las existentes
+  // Preseleccionar pestaña: si hay para añadir, esa; si ya están todas pero hay solo en YTM, ver solo en YTM
   if (plan.total_a_anadir > 0) {
     currentPlanFilter = "to_add";
+  } else if ((plan.total_solo_en_ytm || 0) > 0) {
+    currentPlanFilter = "ytm_only";
   } else {
     currentPlanFilter = "already";
   }
@@ -211,24 +221,45 @@ function renderPlanResult(plan) {
 
 function updatePlanFilterButtons() {
   document.querySelectorAll(".plan-filter-btn").forEach((btn) => {
-    if (btn.dataset.filter === currentPlanFilter) {
+    const f = btn.dataset.filter;
+    if (f === currentPlanFilter) {
       btn.className = `btn btn-sm rounded-pill px-3 py-1 fw-semibold plan-filter-btn ${
-        currentPlanFilter === "to_add"
+        f === "to_add"
           ? "btn-success"
-          : currentPlanFilter === "already"
+          : f === "already"
           ? "btn-info text-dark"
+          : f === "ytm_only"
+          ? "btn-warning text-dark"
           : "btn-secondary"
       }`;
     } else {
       btn.className = `btn btn-sm rounded-pill px-3 py-1 fw-semibold plan-filter-btn ${
-        btn.dataset.filter === "to_add"
+        f === "to_add"
           ? "btn-outline-success"
-          : btn.dataset.filter === "already"
+          : f === "already"
           ? "btn-outline-info"
+          : f === "ytm_only"
+          ? "btn-outline-warning"
           : "btn-outline-secondary"
       }`;
     }
   });
+
+  if (ytmOnlyActions) {
+    if (currentPlanFilter === "ytm_only" && (currentPlanData?.total_solo_en_ytm || 0) > 0) {
+      ytmOnlyActions.classList.remove("d-none");
+    } else {
+      ytmOnlyActions.classList.add("d-none");
+    }
+  }
+
+  if (bannerYtmOnlyInfo) {
+    if (currentPlanFilter === "ytm_only" && (currentPlanData?.total_solo_en_ytm || 0) > 0) {
+      bannerYtmOnlyInfo.classList.remove("d-none");
+    } else {
+      bannerYtmOnlyInfo.classList.add("d-none");
+    }
+  }
 }
 
 function renderPlanTracks() {
@@ -238,13 +269,16 @@ function renderPlanTracks() {
   let list = [];
   if (currentPlanFilter === "to_add") {
     list = currentPlanData.canciones_a_anadir || [];
-    planDetailsCount.textContent = `${list.length} canciones nuevas`;
+    planDetailsCount.textContent = `${list.length} canciones nuevas para YTM`;
   } else if (currentPlanFilter === "already") {
     list = currentPlanData.canciones_ya_existentes || [];
-    planDetailsCount.textContent = `${list.length} ya existentes`;
+    planDetailsCount.textContent = `${list.length} en ambas listas`;
+  } else if (currentPlanFilter === "ytm_only") {
+    list = currentPlanData.canciones_solo_en_ytm || [];
+    planDetailsCount.textContent = `${list.length} canciones solo en YouTube Music`;
   } else {
     list = currentTracks;
-    planDetailsCount.textContent = `${list.length} canciones en total`;
+    planDetailsCount.textContent = `${list.length} canciones de Spotify en total`;
   }
 
   if (list.length === 0) {
@@ -259,18 +293,42 @@ function renderPlanTracks() {
   );
 
   list.slice(0, 150).forEach((t, i) => {
-    const isToAdd = toAddSet.has((t.titulo || "").toLowerCase().trim());
     const tr = document.createElement("tr");
-    const badgeHtml = isToAdd
-      ? '<span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-2 py-1"><i class="fa-solid fa-plus me-1"></i>Se añadirá</span>'
-      : '<span class="badge bg-secondary bg-opacity-25 text-secondary border border-secondary border-opacity-50 px-2 py-1"><i class="fa-solid fa-check me-1"></i>Ya en YTM</span>';
 
-    tr.innerHTML = `
-      <td class="text-secondary small">${i + 1}</td>
-      <td class="fw-semibold text-light">${escapeHtml(t.titulo)}</td>
-      <td class="text-secondary">${escapeHtml((t.artistas || []).join(", "))}</td>
-      <td class="text-end">${badgeHtml}</td>
-    `;
+    if (currentPlanFilter === "ytm_only") {
+      const artStr = (t.artistas || []).join(", ");
+      const copyText = `${t.titulo} - ${artStr}`;
+      tr.innerHTML = `
+        <td class="text-secondary small">${i + 1}</td>
+        <td class="fw-semibold text-light">${escapeHtml(t.titulo)}</td>
+        <td class="text-secondary">${escapeHtml(artStr)}</td>
+        <td class="text-end">
+          <div class="d-flex align-items-center justify-content-end gap-1 flex-wrap">
+            <a href="${escapeHtml(t.spotify_search_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-success rounded-pill px-2 py-1 small fw-semibold d-inline-flex align-items-center gap-1" title="Buscar y añadir en Spotify">
+              <i class="fa-brands fa-spotify"></i>
+              <span>Añadir</span>
+            </a>
+            ${t.ytm_url ? `<a href="${escapeHtml(t.ytm_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-danger rounded-pill px-2 py-1" title="Escuchar en YouTube Music"><i class="fa-brands fa-youtube"></i></a>` : ''}
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1 copy-track-btn" title="Copiar nombre" data-text="${escapeHtml(copyText)}">
+              <i class="fa-regular fa-copy"></i>
+            </button>
+          </div>
+        </td>
+      `;
+    } else {
+      const isToAdd = toAddSet.has((t.titulo || "").toLowerCase().trim());
+      const badgeHtml = isToAdd
+        ? '<span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-2 py-1"><i class="fa-solid fa-plus me-1"></i>Se añadirá</span>'
+        : '<span class="badge bg-secondary bg-opacity-25 text-secondary border border-secondary border-opacity-50 px-2 py-1"><i class="fa-solid fa-check me-1"></i>Ya en YTM</span>';
+
+      tr.innerHTML = `
+        <td class="text-secondary small">${i + 1}</td>
+        <td class="fw-semibold text-light">${escapeHtml(t.titulo)}</td>
+        <td class="text-secondary">${escapeHtml((t.artistas || []).join(", "))}</td>
+        <td class="text-end">${badgeHtml}</td>
+      `;
+    }
+
     planTracksBody.appendChild(tr);
   });
 
@@ -314,7 +372,57 @@ document.addEventListener("click", (e) => {
     updatePlanFilterButtons();
     renderPlanTracks();
   }
+
+  const copyBtn = e.target.closest(".copy-track-btn");
+  if (copyBtn) {
+    const text = copyBtn.dataset.text;
+    if (text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast(`Copiado: ${text}`, "info");
+      }).catch(() => {
+        showToast(text, "info");
+      });
+    }
+  }
 });
+
+if (btnCopyYtmOnly) {
+  btnCopyYtmOnly.addEventListener("click", () => {
+    const list = currentPlanData?.canciones_solo_en_ytm || [];
+    if (!list.length) {
+      showToast("No hay canciones en esta lista para copiar.", "warning");
+      return;
+    }
+    const text = list.map((t) => `${t.titulo} - ${(t.artistas || []).join(", ")}`).join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      showToast(`¡Copiadas ${list.length} canciones al portapapeles!`, "success");
+    }).catch(() => {
+      showToast("Error al copiar al portapapeles.", "danger");
+    });
+  });
+}
+
+if (btnDownloadYtmOnly) {
+  btnDownloadYtmOnly.addEventListener("click", () => {
+    const list = currentPlanData?.canciones_solo_en_ytm || [];
+    if (!list.length) {
+      showToast("No hay canciones en esta lista para descargar.", "warning");
+      return;
+    }
+    const header = `# Canciones en YouTube Music que no están en Spotify (${currentPlaylistName || "playlist"})\n\n`;
+    const text = header + list.map((t, i) => `${i + 1}. ${t.titulo} - ${(t.artistas || []).join(", ")} | Enlace Spotify: ${t.spotify_search_url}`).join("\n");
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `solo_en_ytm_${(currentPlaylistName || "playlist").replace(/\s+/g, "_")}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Archivo .txt descargado con éxito.", "success");
+  });
+}
 
 function escapeHtml(str) {
   if (!str) return "";

@@ -259,22 +259,28 @@
 
           <!-- Plan Stats Cards -->
           <div id="plan-stats-container" class="row g-2 mb-3 d-none">
-            <div class="col-6 col-md-4">
+            <div class="col-6 col-md-3">
               <div class="bg-secondary bg-opacity-10 border border-secondary border-opacity-25 rounded-3 p-2 text-center h-100 d-flex flex-column justify-content-center">
                 <div class="text-secondary small">Acción en YTM</div>
                 <div class="fw-bold fs-6 mt-1" id="plan-badge-action">--</div>
               </div>
             </div>
-            <div class="col-6 col-md-4">
+            <div class="col-6 col-md-3">
               <div class="bg-success bg-opacity-10 border border-success border-opacity-25 rounded-3 p-2 text-center h-100 d-flex flex-column justify-content-center">
-                <div class="text-success small fw-semibold">Canciones Nuevas a Añadir</div>
+                <div class="text-success small fw-semibold">Nuevas para YTM</div>
                 <div class="fw-bold fs-5 text-success" id="plan-stat-to-add">0</div>
               </div>
             </div>
-            <div class="col-12 col-md-4">
+            <div class="col-6 col-md-3">
               <div class="bg-info bg-opacity-10 border border-info border-opacity-25 rounded-3 p-2 text-center h-100 d-flex flex-column justify-content-center">
-                <div class="text-info small fw-semibold">Ya existentes (se omiten)</div>
+                <div class="text-info small fw-semibold">En ambas listas</div>
                 <div class="fw-bold fs-5 text-info" id="plan-stat-already">0</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded-3 p-2 text-center h-100 d-flex flex-column justify-content-center">
+                <div class="text-warning small fw-semibold">Solo en YTM (no en Spotify)</div>
+                <div class="fw-bold fs-5 text-warning" id="plan-stat-ytm-only">0</div>
               </div>
             </div>
           </div>
@@ -289,16 +295,42 @@
                 </button>
               </h2>
               <div id="collapsePlanDetails" class="accordion-collapse collapse">
-                <div class="p-2 border-bottom border-secondary border-opacity-25 d-flex gap-2 flex-wrap">
-                  <button type="button" class="btn btn-sm btn-success rounded-pill px-3 py-1 fw-semibold plan-filter-btn active" data-filter="to_add">
-                    Añadir (<span id="pill-count-add">0</span>)
-                  </button>
-                  <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-3 py-1 fw-semibold plan-filter-btn" data-filter="already">
-                    Ya en YTM (<span id="pill-count-already">0</span>)
-                  </button>
-                  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold plan-filter-btn" data-filter="all">
-                    Todas (<span id="pill-count-all">0</span>)
-                  </button>
+                <div class="p-2 border-bottom border-secondary border-opacity-25 d-flex gap-2 flex-wrap align-items-center justify-content-between">
+                  <div class="d-flex gap-2 flex-wrap">
+                    <button type="button" class="btn btn-sm btn-success rounded-pill px-3 py-1 fw-semibold plan-filter-btn active" data-filter="to_add">
+                      ➕ Añadir a YTM (<span id="pill-count-add">0</span>)
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-3 py-1 fw-semibold plan-filter-btn" data-filter="already">
+                      ✔️ En ambas (<span id="pill-count-already">0</span>)
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3 py-1 fw-semibold plan-filter-btn" data-filter="ytm_only">
+                      ⭐ Solo en YTM (<span id="pill-count-ytm-only">0</span>)
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold plan-filter-btn" data-filter="all">
+                      Todas (<span id="pill-count-all">0</span>)
+                    </button>
+                  </div>
+                  <div id="ytm-only-actions" class="d-none d-flex gap-2">
+                    <button type="button" id="btn-copy-ytm-only" class="btn btn-sm btn-outline-light rounded-pill px-3 py-1 d-flex align-items-center gap-1" title="Copiar lista de canciones que faltan en Spotify">
+                      <i class="fa-regular fa-copy"></i>
+                      <span>Copiar canciones</span>
+                    </button>
+                    <button type="button" id="btn-download-ytm-only" class="btn btn-sm btn-outline-success rounded-pill px-3 py-1 d-flex align-items-center gap-1" title="Descargar archivo con las canciones que faltan en Spotify">
+                      <i class="fa-solid fa-download"></i>
+                      <span>Descargar .txt</span>
+                    </button>
+                  </div>
+                </div>
+                <div id="banner-ytm-only-info" class="p-3 bg-warning bg-opacity-10 border-bottom border-warning border-opacity-25 d-none">
+                  <div class="d-flex align-items-start gap-2">
+                    <i class="fa-brands fa-spotify text-success fs-5 mt-1"></i>
+                    <div>
+                      <div class="fw-semibold text-light small">Canciones en YouTube Music que no están en Spotify:</div>
+                      <div class="text-secondary small">
+                        Haz clic en <strong>«Añadir en Spotify»</strong> para abrir la búsqueda directa de esa canción en Spotify y agregarla a tu playlist, o usa los botones superiores para copiar o descargar la lista completa.
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div class="accordion-body p-0 table-responsive max-h-300">
                   <table class="table table-dark table-striped table-hover mb-0 align-middle small">
@@ -307,7 +339,7 @@
                         <th style="width: 45px;">#</th>
                         <th>Título</th>
                         <th>Artista(s)</th>
-                        <th style="width: 140px;" class="text-end">Acción prevista</th>
+                        <th style="width: 190px;" class="text-end">Acciones</th>
                       </tr>
                     </thead>
                     <tbody id="plan-tracks-body">

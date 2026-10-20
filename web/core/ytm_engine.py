@@ -7,6 +7,7 @@ import json
 import os
 import re
 import time
+import urllib.parse
 from typing import Callable, Optional
 from ytmusicapi import YTMusic
 from ytmusicapi.auth.oauth import OAuthCredentials
@@ -285,6 +286,7 @@ def planificar_transferencia(
     if listas_existentes and modo_sync:
         canciones_ytm = obtener_canciones_ytm(yt, listas_existentes)
         claves_ytm = [clave(t["titulo"], t["artistas"]) for t in canciones_ytm]
+        claves_sp = [clave(t["titulo"], t["artistas"]) for t in canciones_spotify]
 
         canciones_a_anadir = []
         canciones_ya_en_ytm = []
@@ -295,18 +297,36 @@ def planificar_transferencia(
             else:
                 canciones_a_anadir.append(t)
 
+        # Detectar canciones que están en YTM pero NO en Spotify
+        solo_en_ytm = []
+        for t in canciones_ytm:
+            k = clave(t["titulo"], t["artistas"])
+            if not any(coincide(k, c) for c in claves_sp):
+                q = f"{t['titulo']} {' '.join(t['artistas'])}".strip()
+                solo_en_ytm.append({
+                    "id": t.get("id"),
+                    "titulo": t["titulo"],
+                    "artistas": t["artistas"],
+                    "spotify_search_url": f"https://open.spotify.com/search/{urllib.parse.quote(q)}",
+                    "ytm_url": f"https://music.youtube.com/watch?v={t['id']}" if t.get("id") else None,
+                })
+
         nombres_existentes = [p["title"] for p in listas_existentes]
 
+        partes_msg = []
         if canciones_a_anadir:
-            msg = (
-                f"Se sincronizará con la playlist existente '{nombres_existentes[0]}' en YouTube Music. "
-                f"Se añadirán {len(canciones_a_anadir)} canciones nuevas y se omitirán {len(canciones_ya_en_ytm)} "
-                f"que ya están en tu lista."
+            partes_msg.append(
+                f"Se sincronizará con la playlist existente '{nombres_existentes[0]}' en YouTube Music: "
+                f"se añadirá(n) {len(canciones_a_anadir)} canción(es) nueva(s) y se omitirá(n) {len(canciones_ya_en_ytm)} que ya existen."
             )
         else:
-            msg = (
-                f"¡Tu playlist '{nombres_existentes[0]}' en YouTube Music ya tiene todas las canciones de Spotify! "
-                f"No hace falta añadir ninguna canción nueva."
+            partes_msg.append(
+                f"¡Tu playlist '{nombres_existentes[0]}' en YouTube Music ya tiene todas las canciones de Spotify!"
+            )
+
+        if solo_en_ytm:
+            partes_msg.append(
+                f"Además, se han detectado {len(solo_en_ytm)} canciones en YouTube Music que no están en la lista original de Spotify."
             )
 
         return {
@@ -317,9 +337,11 @@ def planificar_transferencia(
             "total_spotify": len(canciones_spotify),
             "total_a_anadir": len(canciones_a_anadir),
             "total_ya_existentes": len(canciones_ya_en_ytm),
+            "total_solo_en_ytm": len(solo_en_ytm),
             "canciones_a_anadir": canciones_a_anadir,
             "canciones_ya_existentes": canciones_ya_en_ytm,
-            "mensaje": msg,
+            "canciones_solo_en_ytm": solo_en_ytm,
+            "mensaje": " ".join(partes_msg),
         }
     else:
         if listas_existentes:
@@ -341,8 +363,10 @@ def planificar_transferencia(
             "total_spotify": len(canciones_spotify),
             "total_a_anadir": len(canciones_spotify),
             "total_ya_existentes": 0,
+            "total_solo_en_ytm": 0,
             "canciones_a_anadir": canciones_spotify,
             "canciones_ya_existentes": [],
+            "canciones_solo_en_ytm": [],
             "mensaje": msg,
         }
 
