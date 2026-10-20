@@ -75,12 +75,15 @@ def buscar_listas_ytm(yt: YTMusic, nombre_base: str) -> list[dict]:
     """
     Busca en YTM todas las listas que coincidan con el nombre base:
     'MiLista', 'MiLista 2', 'MiLista 3'...
+    Insensible a mayúsculas/minúsculas y espacios superfluos.
     """
     todas = yt.get_library_playlists(limit=None)
-    patron = re.compile(rf"^{re.escape(nombre_base)}(\s+\d+)?$")
+    nombre_limpio = nombre_base.strip()
+    patron = re.compile(rf"^{re.escape(nombre_limpio)}(\s+\d+)?$", re.IGNORECASE)
     encontradas = []
     for pl in todas:
-        if patron.match(pl["title"]):
+        tit = pl.get("title", "").strip()
+        if patron.match(tit):
             encontradas.append(pl)
 
     def orden(p):

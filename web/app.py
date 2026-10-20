@@ -204,6 +204,13 @@ def api_start_transfer():
             "error": "No se encontró el archivo de autenticación de YouTube Music (headers_auth.json o browser.json). Configúralo primero.",
         }), 400
 
+    ok, auth_err = verificar_autenticacion_ytm(auth_file)
+    if not ok:
+        return jsonify({
+            "success": False,
+            "error": auth_err,
+        }), 401
+
     job_id = crear_tarea(
         nombre_playlist=nombre,
         canciones=canciones,

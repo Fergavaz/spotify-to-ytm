@@ -122,6 +122,14 @@ def _ejecutar_transferencia(
         _agregar_log(job_id, f"Iniciando transferencia para '{nombre_playlist}' ({len(canciones)} pistas)")
         yt = obtener_cliente_ytm(ruta_auth)
 
+        # Validación previa obligatoria: detectar sesiones o tokens caducados
+        try:
+            yt.get_history()
+        except Exception as e:
+            msg = str(e).lower()
+            if "unauthorized" in msg or "401" in msg or "sign in" in msg or "none" in msg:
+                raise RuntimeError("La sesión de YouTube Music ha caducado (Error 401). Debes renovar tu archivo de cabeceras o generar un archivo oauth.json en la configuración.")
+
         listas_existentes = []
         canciones_existentes_ytm = []
         canciones_a_buscar = canciones
