@@ -497,33 +497,54 @@ def obtener_playlists_usuario_publicas(usuario: str) -> list[dict]:
     user_id = usuario.strip().strip('"').strip()
     if "spotify.com/user/" in user_id:
         user_id = user_id.split("spotify.com/user/")[1].split("?")[0].strip("/")
+    elif "?" in user_id:
+        user_id = user_id.split("?")[0].strip("/")
 
     print(f"\n🔍 Buscando playlists públicas del usuario '{user_id}'...")
     encontradas = []
     vistos_ids = set()
 
-    # Estrategia 1: Scraping del perfil público HTML con User-Agent compatible
+    # Estrategia 1: Parsear initialState en el HTML del perfil público
     try:
         url_perfil = f"https://open.spotify.com/user/{urllib.parse.quote(user_id)}"
         req = urllib.request.Request(url_perfil, headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
         })
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=12) as resp:
             html = resp.read().decode("utf-8", errors="ignore")
-            # Extraer enlaces a playlists junto con el nombre que aparece en el perfil
-            anchors = re.findall(
-                r'<a [^>]*href=[\x27\x22]/playlist/([a-zA-Z0-9]{22})[\x27\x22][^>]*>(.*?)</a>',
-                html,
-                re.DOTALL,
-            )
-            for pid, content in anchors:
+
+            m = re.search(r'<script[^>]*id=[\x27\x22]initialState[\x27\x22][^>]*>(.*?)</script>', html)
+            if m:
+                raw = m.group(1).strip()
+                try:
+                    data = json.loads(base64.b64decode(raw).decode("utf-8")) if not raw.startswith("{") else json.loads(raw)
+                    items_dict = data.get("entities", {}).get("items", {})
+                    for v in items_dict.values():
+                        if not isinstance(v, dict):
+                            continue
+                        for pl_key in ("publicPlaylistsV2", "publicPlaylists"):
+                            for item in v.get(pl_key, {}).get("items", []):
+                                uri = item.get("_uri") or item.get("uri") or item.get("data", {}).get("uri") or ""
+                                name = item.get("data", {}).get("name") or item.get("name") or "Playlist"
+                                m_id = re.search(r"playlist[:/]([a-zA-Z0-9]{22})", uri)
+                                if m_id and m_id.group(1) not in vistos_ids:
+                                    pid = m_id.group(1)
+                                    vistos_ids.add(pid)
+                                    encontradas.append({
+                                        "id": pid,
+                                        "nombre": name,
+                                        "url": f"https://open.spotify.com/playlist/{pid}",
+                                        "total": "?",
+                                    })
+                except Exception:
+                    pass
+
+            for pid in re.findall(r"playlist[:/]([a-zA-Z0-9]{22})", html):
                 if pid not in vistos_ids:
                     vistos_ids.add(pid)
-                    spans = re.findall(r'<span[^>]*>(.*?)</span>', content)
-                    titulo = spans[0].strip() if spans else f"Playlist {pid}"
                     encontradas.append({
                         "id": pid,
-                        "nombre": titulo,
+                        "nombre": f"Playlist {pid}",
                         "url": f"https://open.spotify.com/playlist/{pid}",
                         "total": "?",
                     })

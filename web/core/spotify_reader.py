@@ -7,8 +7,10 @@ Permite:
   - Consulta opcional mediante API de Spotify (spotipy).
 """
 
+import base64
 import csv
 import io
+import json
 import re
 import urllib.parse
 import urllib.request
@@ -48,10 +50,28 @@ def buscar_playlists_usuario(usuario: str) -> list[dict]:
     """
     Obtiene las playlists públicas de un usuario de Spotify
     a partir de su ID de usuario o enlace de perfil.
+    Soporta initialState codificado en base64 (Next.js/React de Spotify).
     """
     user_id = usuario.strip().strip('"').strip()
+
+    # Si el usuario ha pegado accidentalmente una URL de playlist
+    if "spotify.com/playlist/" in user_id:
+        pid = user_id.split("spotify.com/playlist/")[1].split("?")[0].strip("/")
+        try:
+            nombre, pistas = extraer_canciones_por_url(user_id)
+            return [{
+                "id": pid,
+                "nombre": nombre,
+                "url": f"https://open.spotify.com/playlist/{pid}",
+                "total": len(pistas),
+            }]
+        except Exception:
+            pass
+
     if "spotify.com/user/" in user_id:
         user_id = user_id.split("spotify.com/user/")[1].split("?")[0].strip("/")
+    elif "?" in user_id:
+        user_id = user_id.split("?")[0].strip("/")
 
     encontradas = []
     vistos_ids = set()
@@ -59,30 +79,52 @@ def buscar_playlists_usuario(usuario: str) -> list[dict]:
     try:
         url_perfil = f"https://open.spotify.com/user/{urllib.parse.quote(user_id)}"
         req = urllib.request.Request(url_perfil, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
         })
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=12) as resp:
             html = resp.read().decode("utf-8", errors="ignore")
-            anchors = re.findall(
-                r'<a [^>]*href=[\x27\x22]/playlist/([a-zA-Z0-9]{22})[\x27\x22][^>]*>(.*?)</a>',
-                html,
-                re.DOTALL,
-            )
-            for pid, content in anchors:
+
+            # Estrategia 1: Parsear initialState (base64 o JSON plano)
+            m = re.search(r'<script[^>]*id=[\x27\x22]initialState[\x27\x22][^>]*>(.*?)</script>', html)
+            if m:
+                raw = m.group(1).strip()
+                try:
+                    data = json.loads(base64.b64decode(raw).decode("utf-8")) if not raw.startswith("{") else json.loads(raw)
+                    items_dict = data.get("entities", {}).get("items", {})
+                    for v in items_dict.values():
+                        if not isinstance(v, dict):
+                            continue
+                        for pl_key in ("publicPlaylistsV2", "publicPlaylists"):
+                            for item in v.get(pl_key, {}).get("items", []):
+                                uri = item.get("_uri") or item.get("uri") or item.get("data", {}).get("uri") or ""
+                                name = item.get("data", {}).get("name") or item.get("name") or "Playlist"
+                                m_id = re.search(r"playlist[:/]([a-zA-Z0-9]{22})", uri)
+                                if m_id and m_id.group(1) not in vistos_ids:
+                                    pid = m_id.group(1)
+                                    vistos_ids.add(pid)
+                                    encontradas.append({
+                                        "id": pid,
+                                        "nombre": name,
+                                        "url": f"https://open.spotify.com/playlist/{pid}",
+                                        "total": "?",
+                                    })
+                except Exception:
+                    pass
+
+            # Estrategia 2: Regex general sobre todo el HTML para capturar cualquier playlist referenciada
+            for pid in re.findall(r"playlist[:/]([a-zA-Z0-9]{22})", html):
                 if pid not in vistos_ids:
                     vistos_ids.add(pid)
-                    spans = re.findall(r'<span[^>]*>(.*?)</span>', content)
-                    titulo = spans[0].strip() if spans else f"Playlist {pid}"
                     encontradas.append({
                         "id": pid,
-                        "nombre": titulo,
+                        "nombre": f"Playlist {pid}",
                         "url": f"https://open.spotify.com/playlist/{pid}",
                         "total": "?",
                     })
     except Exception as e:
         pass
 
-    # Si encontramos listas y tenemos el scraper, obtenemos el total real
+    # Si encontramos listas y tenemos el scraper, obtenemos el total real y el nombre oficial
     if encontradas and HAS_SCRAPER:
         detalles = []
         try:

@@ -49,11 +49,17 @@ def obtener_cliente_ytm(ruta_auth: str) -> YTMusic:
 def verificar_autenticacion_ytm(ruta_auth: str) -> tuple[bool, str]:
     """
     Verifica si las credenciales de YouTube Music son válidas realizando una llamada ligera.
+    Comprueba permisos de lectura y estado de sesión activa.
     """
     try:
         yt = YTMusic(ruta_auth)
-        # Intentar obtener las playlists de biblioteca (requiere autenticación)
-        pl = yt.get_library_playlists(limit=1)
+        # Comprobar llamada autenticada para detectar tokens o cookies expiradas (Error 401)
+        try:
+            yt.get_history()
+        except Exception as e:
+            msg = str(e).lower()
+            if "unauthorized" in msg or "401" in msg or "sign in" in msg or "none" in msg:
+                return False, "La sesión de YouTube Music ha caducado (Error 401). Debes renovar tu archivo headers_auth.json o generar un oauth.json."
         return True, "Conectado correctamente a YouTube Music."
     except Exception as e:
         return False, f"Error de autenticación en YouTube Music: {str(e)}"
