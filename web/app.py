@@ -148,7 +148,47 @@ def api_upload_auth():
     })
 
 
-OAUTH_FLOWS = {}
+OAUTH_FLOWS_FILE = os.path.join(DATA_DIR, ".oauth_flows.json")
+
+
+def _get_oauth_flow(session_id: str) -> dict:
+    if os.path.exists(OAUTH_FLOWS_FILE):
+        try:
+            with open(OAUTH_FLOWS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get(session_id)
+        except Exception:
+            pass
+    return None
+
+
+def _save_oauth_flow(session_id: str, flow_dict: dict):
+    data = {}
+    if os.path.exists(OAUTH_FLOWS_FILE):
+        try:
+            with open(OAUTH_FLOWS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    data[session_id] = flow_dict
+    try:
+        with open(OAUTH_FLOWS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+
+def _remove_oauth_flow(session_id: str):
+    if os.path.exists(OAUTH_FLOWS_FILE):
+        try:
+            with open(OAUTH_FLOWS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if session_id in data:
+                del data[session_id]
+                with open(OAUTH_FLOWS_FILE, "w", encoding="utf-8") as f:
+                    json.dump(data, f)
+        except Exception:
+            pass
 
 
 @app.route("/api/oauth/init", methods=["POST"])
@@ -168,14 +208,14 @@ def api_oauth_init():
         flow_data = iniciar_flujo_oauth(client_id, client_secret)
         import uuid
         session_id = uuid.uuid4().hex[:12]
-        OAUTH_FLOWS[session_id] = {
+        _save_oauth_flow(session_id, {
             "client_id": client_id,
             "client_secret": client_secret,
             "device_code": flow_data["device_code"],
             "user_code": flow_data["user_code"],
             "expires_at": time.time() + flow_data.get("expires_in", 1800),
             "interval": flow_data.get("interval", 5),
-        }
+        })
 
         return jsonify({
             "success": True,
@@ -192,12 +232,12 @@ def api_oauth_init():
 @app.route("/api/oauth/check/<session_id>", methods=["GET"])
 def api_oauth_check(session_id):
     """Comprueba si el usuario ha autorizado la app en Google."""
-    flow = OAUTH_FLOWS.get(session_id)
+    flow = _get_oauth_flow(session_id)
     if not flow:
         return jsonify({"success": False, "status": "error", "error": "Sesión OAuth expirada o inexistente."}), 404
 
     if time.time() > flow["expires_at"]:
-        del OAUTH_FLOWS[session_id]
+        _remove_oauth_flow(session_id)
         return jsonify({"success": False, "status": "error", "error": "El código ha caducado. Vuelve a iniciar el flujo."}), 400
 
     ruta_oauth = os.path.join(DATA_DIR, "oauth.json")
@@ -209,7 +249,7 @@ def api_oauth_check(session_id):
     )
 
     if status == "success":
-        del OAUTH_FLOWS[session_id]
+        _remove_oauth_flow(session_id)
         ok, msg = verificar_autenticacion_ytm(ruta_oauth)
         return jsonify({
             "success": True,
@@ -223,7 +263,7 @@ def api_oauth_check(session_id):
             "status": "pending",
         })
     else:
-        del OAUTH_FLOWS[session_id]
+        _remove_oauth_flow(session_id)
         return jsonify({
             "success": False,
             "status": "error",
