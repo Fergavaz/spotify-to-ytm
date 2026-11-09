@@ -51,7 +51,7 @@ systemctl reload apache2
 
 # Ajustar permisos para www-data
 chown -R www-data:www-data "${APP_DIR}"
-chmod -R 775 "${APP_DIR}/reports" "${APP_DIR}/uploads"
+chmod -R 775 "${APP_DIR}/data" "${APP_DIR}/reports" "${APP_DIR}/uploads"
 
 echo ""
 echo "=============================================================================="

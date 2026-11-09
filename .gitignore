@@ -29,3 +29,6 @@ no_encontradas_en_ytm.csv
 # IDEs
 .idea/
 .vscode/
+
+# Archivos comprimidos y empaquetados
+*.zip
