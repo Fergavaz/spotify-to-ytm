@@ -2,6 +2,8 @@
 # ==============================================================================
 # Script de Instalación Automatizada para Debian Linux
 # Spotify to YouTube Music — Web Application
+# Dominio: y2s.fergavaz.duckdns.org
+# Ruta de instalación: /var/www/html/y2s
 # ==============================================================================
 set -e
 
@@ -11,21 +13,24 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-APP_DIR="/var/www/spotify-to-ytm-web"
+APP_DIR="/var/www/html/y2s"
+DOMAIN="y2s.fergavaz.duckdns.org"
 SCRIPT_SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "🚀 Iniciando instalación de Spotify to YouTube Music Web en Debian..."
+echo "📍 Destino: ${APP_DIR}"
+echo "🌐 Dominio: ${DOMAIN}"
 
 # 1. Actualizar repositorios e instalar paquetes del sistema
 echo "📦 [1/6] Instalando dependencias de Debian y Apache..."
 apt-get update -y
-apt-get install -y python3 python3-venv python3-pip apache2 libapache2-mod-auth-openidc curl
+apt-get install -y python3 python3-venv python3-pip apache2 curl
 
 # 2. Habilitar módulos de proxy en Apache
 echo "⚙️  [2/6] Habilitando módulos de Apache (proxy, proxy_http, headers)..."
 a2enmod proxy proxy_http headers
 
-# 3. Copiar la aplicación a /var/www/
+# 3. Copiar la aplicación a /var/www/html/y2s
 if [ "${SCRIPT_SRC_DIR}" != "${APP_DIR}" ]; then
   echo "📁 [3/6] Copiando archivos a ${APP_DIR}..."
   mkdir -p "${APP_DIR}"
@@ -49,8 +54,8 @@ systemctl restart spotify-ytm.service
 
 # 6. Configurar VirtualHost en Apache
 echo "🌐 [6/6] Configurando VirtualHost en Apache..."
-cp "${APP_DIR}/deploy/apache-spotify-ytm.conf" /etc/apache2/sites-available/spotify-ytm.conf
-a2ensite spotify-ytm.conf
+cp "${APP_DIR}/deploy/y2s.fergavaz.duckdns.org.conf" "/etc/apache2/sites-available/${DOMAIN}.conf"
+a2ensite "${DOMAIN}.conf"
 systemctl reload apache2
 
 # Ajustar permisos para www-data
@@ -64,7 +69,11 @@ echo "✅ ¡Instalación completada con éxito!"
 echo "=============================================================================="
 echo "La aplicación está corriendo en segundo plano gestionada por systemd y Apache."
 echo "Puedes acceder desde tu navegador en:"
-echo "   http://<IP-DE-TU-SERVIDOR-DEBIAN>/"
+echo "   http://${DOMAIN}/"
+echo ""
+echo "💡 Para habilitar SSL/HTTPS gratuito con Let's Encrypt:"
+echo "   sudo apt install -y certbot python3-certbot-apache"
+echo "   sudo certbot --apache -d ${DOMAIN}"
 echo ""
 echo "Comandos útiles:"
 echo "   Ver estado de la app:   systemctl status spotify-ytm"
