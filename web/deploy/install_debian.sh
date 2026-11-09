@@ -26,9 +26,13 @@ echo "⚙️  [2/6] Habilitando módulos de Apache (proxy, proxy_http, headers).
 a2enmod proxy proxy_http headers
 
 # 3. Copiar la aplicación a /var/www/
-echo "📁 [3/6] Copiando archivos a ${APP_DIR}..."
-mkdir -p "${APP_DIR}"
-cp -r "${SCRIPT_SRC_DIR}"/* "${APP_DIR}/"
+if [ "${SCRIPT_SRC_DIR}" != "${APP_DIR}" ]; then
+  echo "📁 [3/6] Copiando archivos a ${APP_DIR}..."
+  mkdir -p "${APP_DIR}"
+  cp -r "${SCRIPT_SRC_DIR}"/* "${APP_DIR}/"
+else
+  echo "📁 [3/6] La aplicación ya reside en ${APP_DIR}."
+fi
 
 # 4. Crear entorno virtual de Python e instalar requisitos
 echo "🐍 [4/6] Creando entorno virtual e instalando librerías Python..."
@@ -50,6 +54,7 @@ a2ensite spotify-ytm.conf
 systemctl reload apache2
 
 # Ajustar permisos para www-data
+mkdir -p "${APP_DIR}/data" "${APP_DIR}/reports" "${APP_DIR}/uploads"
 chown -R www-data:www-data "${APP_DIR}"
 chmod -R 775 "${APP_DIR}/data" "${APP_DIR}/reports" "${APP_DIR}/uploads"
 

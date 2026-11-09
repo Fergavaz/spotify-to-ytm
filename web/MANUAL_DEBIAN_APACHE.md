@@ -102,9 +102,11 @@ sudo ./venv/bin/pip install -r requirements.txt
 ```
 
 ### Paso 5: Configurar permisos
-Asegura que el usuario `www-data` pueda escribir en los directorios de subida y reportes:
+Asegura que el usuario `www-data` pueda escribir en los directorios de subida, reportes y almacenamiento de credenciales:
 ```bash
+sudo mkdir -p /var/www/spotify-to-ytm-web/{data,reports,uploads}
 sudo chown -R www-data:www-data /var/www/spotify-to-ytm-web
+sudo chmod -R 775 /var/www/spotify-to-ytm-web/data
 sudo chmod -R 775 /var/www/spotify-to-ytm-web/uploads
 sudo chmod -R 775 /var/www/spotify-to-ytm-web/reports
 ```
@@ -115,7 +117,7 @@ Crea el archivo `/etc/systemd/system/spotify-ytm.service`:
 sudo nano /etc/systemd/system/spotify-ytm.service
 ```
 
-Pega el siguiente contenido:
+Pega el siguiente contenido (se utiliza 1 worker con 8 threads para mantener la memoria compartida del gestor de tareas en segundo plano):
 ```ini
 [Unit]
 Description=Spotify to YouTube Music Web Service (Gunicorn)
@@ -126,7 +128,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=/var/www/spotify-to-ytm-web
 Environment="PATH=/var/www/spotify-to-ytm-web/venv/bin"
-ExecStart=/var/www/spotify-to-ytm-web/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:5000 wsgi:app
+ExecStart=/var/www/spotify-to-ytm-web/venv/bin/gunicorn --workers 1 --threads 8 --bind 127.0.0.1:5000 --timeout 120 wsgi:app
 Restart=always
 RestartSec=5
 
