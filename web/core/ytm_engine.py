@@ -2,6 +2,7 @@
 Motor de interacción con YouTube Music (ytmusicapi).
 Maneja autenticación, búsqueda multietapa con fallback, sincronización y chunking.
 """
+from __future__ import annotations
 
 import json
 import os

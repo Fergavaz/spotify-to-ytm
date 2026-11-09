@@ -3,6 +3,7 @@ Gestor de tareas en segundo plano (Background Job Manager).
 Permite ejecutar transferencias asíncronas con seguimiento de progreso,
 registro de logs en tiempo real y generación de informes CSV.
 """
+from __future__ import annotations
 
 import csv
 import io
@@ -10,7 +11,7 @@ import os
 import threading
 import time
 import uuid
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from core.ytm_engine import (
     obtener_cliente_ytm,
     buscar_listas_ytm,
@@ -61,7 +62,7 @@ def crear_tarea(nombre_playlist: str, canciones: List[dict], modo_sincronizar: b
     return job_id
 
 
-def obtener_estado_tarea(job_id: str) -> Dict[str, Any] | None:
+def obtener_estado_tarea(job_id: str) -> Optional[Dict[str, Any]]:
     """Devuelve los datos actuales del estado de la tarea."""
     with JOBS_LOCK:
         job = JOBS.get(job_id)

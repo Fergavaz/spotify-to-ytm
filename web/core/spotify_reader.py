@@ -6,6 +6,7 @@ Permite:
   - Carga y parseo de archivos CSV (Exportify, Spotlistr, TuneMyMusic, etc.).
   - Consulta opcional mediante API de Spotify (spotipy).
 """
+from __future__ import annotations
 
 import base64
 import csv

@@ -3,6 +3,7 @@
 Spotify to YouTube Music — Web Application
 Servidor Flask con soporte para ejecución en segundo plano y despliegue en Apache / Debian.
 """
+from __future__ import annotations
 
 import json
 import os

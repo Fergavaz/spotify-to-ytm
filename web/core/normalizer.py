@@ -2,6 +2,7 @@
 Normalización de títulos y artistas para coincidencia flexible
 entre canciones de Spotify y YouTube Music.
 """
+from __future__ import annotations
 
 import difflib
 import re
