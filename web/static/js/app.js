@@ -48,18 +48,29 @@ const planStatsContainer = document.getElementById("plan-stats-container");
 const planBadgeAction = document.getElementById("plan-badge-action");
 const planStatToAdd = document.getElementById("plan-stat-to-add");
 const planStatAlready = document.getElementById("plan-stat-already");
+const planStatYtmOnly = document.getElementById("plan-stat-ytm-only");
+const planStatDuplicates = document.getElementById("plan-stat-duplicates");
+const planStatDuplicatesCol = document.getElementById("plan-stat-duplicates-col");
 const planListsAccordion = document.getElementById("plan-lists-accordion");
 const planDetailsCount = document.getElementById("plan-details-count");
 const planTracksBody = document.getElementById("plan-tracks-body");
 const pillCountAdd = document.getElementById("pill-count-add");
 const pillCountAlready = document.getElementById("pill-count-already");
 const pillCountYtmOnly = document.getElementById("pill-count-ytm-only");
+const pillBtnDuplicates = document.getElementById("pill-btn-duplicates");
+const pillCountDuplicates = document.getElementById("pill-count-duplicates");
 const pillCountAll = document.getElementById("pill-count-all");
-const planStatYtmOnly = document.getElementById("plan-stat-ytm-only");
 const ytmOnlyActions = document.getElementById("ytm-only-actions");
 const bannerYtmOnlyInfo = document.getElementById("banner-ytm-only-info");
 const btnCopyYtmOnly = document.getElementById("btn-copy-ytm-only");
 const btnDownloadYtmOnly = document.getElementById("btn-download-ytm-only");
+const duplicatesActions = document.getElementById("duplicates-actions");
+const bannerDuplicatesInfo = document.getElementById("banner-duplicates-info");
+const btnSelectAllDuplicates = document.getElementById("btn-select-all-duplicates");
+const btnDeselectDuplicates = document.getElementById("btn-deselect-duplicates");
+const btnDeleteSelectedDuplicates = document.getElementById("btn-delete-selected-duplicates");
+const dupSelectedCount = document.getElementById("dup-selected-count");
+const thStatusLabel = document.getElementById("th-status-label");
 
 const monitorSection = document.getElementById("monitor-section");
 const transferProgressBar = document.getElementById("transfer-progress-bar");
@@ -117,10 +128,16 @@ function showToast(message, type = "info") {
 let currentPlanData = null;
 let currentPlanFilter = "to_add";
 let planDebounceTimer = null;
+let currentSortCol = null;
+let currentSortDir = "asc";
+let showAllTracks = false;
 
 function displayTracksPreview(name, tracks) {
   currentPlaylistName = name;
   currentTracks = tracks;
+  showAllTracks = false;
+  currentSortCol = null;
+  currentSortDir = "asc";
 
   inputTargetName.value = name;
   countNumber.textContent = tracks.length;
@@ -188,10 +205,20 @@ function renderPlanResult(plan) {
   planStatToAdd.textContent = plan.total_a_anadir;
   planStatAlready.textContent = plan.total_ya_existentes;
   if (planStatYtmOnly) planStatYtmOnly.textContent = plan.total_solo_en_ytm || 0;
+  if (planStatDuplicates) planStatDuplicates.textContent = plan.total_duplicados_ytm || 0;
   pillCountAdd.textContent = plan.total_a_anadir;
   pillCountAlready.textContent = plan.total_ya_existentes;
   if (pillCountYtmOnly) pillCountYtmOnly.textContent = plan.total_solo_en_ytm || 0;
+  if (pillCountDuplicates) pillCountDuplicates.textContent = plan.total_duplicados_ytm || 0;
   pillCountAll.textContent = plan.total_spotify;
+
+  if (pillBtnDuplicates) {
+    if ((plan.total_duplicados_ytm || 0) > 0) {
+      pillBtnDuplicates.classList.remove("d-none");
+    } else {
+      pillBtnDuplicates.classList.add("d-none");
+    }
+  }
 
   if (plan.tipo_accion === "sincronizar") {
     planResultAlert.className = "alert alert-success border-0 bg-opacity-10 d-flex align-items-start gap-3 rounded-3 mb-3";
@@ -207,14 +234,17 @@ function renderPlanResult(plan) {
     planBadgeAction.innerHTML = '<span class="badge bg-success"><i class="fa-solid fa-plus me-1"></i>Crear Nueva</span>';
   }
 
-  // Preseleccionar pestaña: si hay para añadir, esa; si ya están todas pero hay solo en YTM, ver solo en YTM
+  // Preseleccionar pestaña inteligente
   if (plan.total_a_anadir > 0) {
     currentPlanFilter = "to_add";
+  } else if ((plan.total_duplicados_ytm || 0) > 0) {
+    currentPlanFilter = "duplicates";
   } else if ((plan.total_solo_en_ytm || 0) > 0) {
     currentPlanFilter = "ytm_only";
   } else {
     currentPlanFilter = "already";
   }
+  updateSortIcons();
   updatePlanFilterButtons();
   renderPlanTracks();
 }
@@ -230,6 +260,8 @@ function updatePlanFilterButtons() {
           ? "btn-info text-dark"
           : f === "ytm_only"
           ? "btn-warning text-dark"
+          : f === "duplicates"
+          ? "btn-danger text-light"
           : "btn-secondary"
       }`;
     } else {
@@ -240,6 +272,8 @@ function updatePlanFilterButtons() {
           ? "btn-outline-info"
           : f === "ytm_only"
           ? "btn-outline-warning"
+          : f === "duplicates"
+          ? "btn-outline-danger"
           : "btn-outline-secondary"
       }`;
     }
@@ -260,6 +294,46 @@ function updatePlanFilterButtons() {
       bannerYtmOnlyInfo.classList.add("d-none");
     }
   }
+
+  if (duplicatesActions) {
+    if (currentPlanFilter === "duplicates" && (currentPlanData?.total_duplicados_ytm || 0) > 0) {
+      duplicatesActions.classList.remove("d-none");
+    } else {
+      duplicatesActions.classList.add("d-none");
+    }
+  }
+
+  if (bannerDuplicatesInfo) {
+    if (currentPlanFilter === "duplicates" && (currentPlanData?.total_duplicados_ytm || 0) > 0) {
+      bannerDuplicatesInfo.classList.remove("d-none");
+    } else {
+      bannerDuplicatesInfo.classList.add("d-none");
+    }
+  }
+
+  if (thStatusLabel) {
+    if (currentPlanFilter === "duplicates") {
+      thStatusLabel.textContent = "Grupo / Acciones";
+    } else if (currentPlanFilter === "ytm_only") {
+      thStatusLabel.textContent = "Acciones";
+    } else {
+      thStatusLabel.textContent = "Estado";
+    }
+  }
+}
+
+function updateSortIcons() {
+  document.querySelectorAll(".sort-icon").forEach((icon) => {
+    const col = icon.dataset.col;
+    if (col === currentSortCol) {
+      icon.className =
+        currentSortDir === "asc"
+          ? "fa-solid fa-sort-up ms-1 text-primary sort-icon"
+          : "fa-solid fa-sort-down ms-1 text-primary sort-icon";
+    } else {
+      icon.className = "fa-solid fa-sort ms-1 text-muted sort-icon";
+    }
+  });
 }
 
 function renderPlanTracks() {
@@ -276,6 +350,10 @@ function renderPlanTracks() {
   } else if (currentPlanFilter === "ytm_only") {
     list = currentPlanData.canciones_solo_en_ytm || [];
     planDetailsCount.textContent = `${list.length} canciones solo en YouTube Music`;
+  } else if (currentPlanFilter === "duplicates") {
+    list = currentPlanData.canciones_duplicadas_ytm || [];
+    const numGrupos = new Set(list.map((t) => t.grupo_id)).size;
+    planDetailsCount.textContent = `${list.length} canciones duplicadas (${numGrupos} grupos) en YouTube Music`;
   } else {
     list = currentTracks;
     planDetailsCount.textContent = `${list.length} canciones de Spotify en total`;
@@ -285,6 +363,7 @@ function renderPlanTracks() {
     const tr = document.createElement("tr");
     tr.innerHTML = `<td colspan="4" class="text-center text-secondary py-3">No hay canciones en esta categoría.</td>`;
     planTracksBody.appendChild(tr);
+    updateDuplicateSelectedCount();
     return;
   }
 
@@ -292,14 +371,101 @@ function renderPlanTracks() {
     (currentPlanData.canciones_a_anadir || []).map((t) => (t.titulo || "").toLowerCase().trim())
   );
 
-  list.slice(0, 150).forEach((t, i) => {
+  // Mapear elementos guardando el índice original de la lista
+  let items = list.map((item, idx) => ({
+    ...item,
+    _origIdx: idx + 1,
+  }));
+
+  // Ordenar columnas según selección del usuario
+  if (currentSortCol) {
+    items.sort((a, b) => {
+      if (currentSortCol === "index") {
+        return currentSortDir === "asc" ? a._origIdx - b._origIdx : b._origIdx - a._origIdx;
+      }
+      if (currentSortCol === "title") {
+        const titA = (a.titulo || a.title || "").toLowerCase();
+        const titB = (b.titulo || b.title || "").toLowerCase();
+        const c = titA.localeCompare(titB, "es", { sensitivity: "base" });
+        return currentSortDir === "asc" ? c : -c;
+      }
+      if (currentSortCol === "artist") {
+        const artA = (Array.isArray(a.artistas) ? a.artistas.join(", ") : (a.artista || "")).toLowerCase();
+        const artB = (Array.isArray(b.artistas) ? b.artistas.join(", ") : (b.artista || "")).toLowerCase();
+        const c = artA.localeCompare(artB, "es", { sensitivity: "base" });
+        return currentSortDir === "asc" ? c : -c;
+      }
+      if (currentSortCol === "status") {
+        if (currentPlanFilter === "duplicates") {
+          const gA = a.grupo_num || 0;
+          const gB = b.grupo_num || 0;
+          if (gA !== gB) return currentSortDir === "asc" ? gA - gB : gB - gA;
+          const cA = a.copia_num || 0;
+          const cB = b.copia_num || 0;
+          return currentSortDir === "asc" ? cA - cB : cB - cA;
+        }
+        const isAddA = toAddSet.has((a.titulo || "").toLowerCase().trim()) ? 1 : 0;
+        const isAddB = toAddSet.has((b.titulo || "").toLowerCase().trim()) ? 1 : 0;
+        return currentSortDir === "asc" ? isAddA - isAddB : isAddB - isAddA;
+      }
+      return 0;
+    });
+  }
+
+  // Comprobar paginación / opción de mostrar todas
+  const displayItems = (!showAllTracks && items.length > 150) ? items.slice(0, 150) : items;
+
+  displayItems.forEach((t) => {
     const tr = document.createElement("tr");
 
-    if (currentPlanFilter === "ytm_only") {
+    if (currentPlanFilter === "duplicates") {
+      tr.className = t.es_original ? "tr-duplicate-original" : "tr-duplicate-copy";
+      const badgeCopy = t.es_original
+        ? '<span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-50 px-2 py-1 small"><i class="fa-solid fa-shield-halved me-1"></i>Copia 1 (Conservar)</span>'
+        : `<span class="badge bg-danger bg-opacity-25 text-danger border border-danger border-opacity-50 px-2 py-1 small"><i class="fa-solid fa-copy me-1"></i>Copia ${t.copia_num} (Repetida)</span>`;
+      const badgeGroup = `<span class="badge bg-secondary bg-opacity-25 text-secondary border border-secondary border-opacity-25 px-2 py-1 small">Grupo #${t.grupo_num}</span>`;
+
+      tr.innerHTML = `
+        <td class="text-secondary small">
+          <div class="d-flex align-items-center gap-2">
+            <input type="checkbox" class="form-check-input dup-checkbox m-0"
+              data-group="${t.grupo_id}"
+              data-is-original="${t.es_original}"
+              data-is-copy="${!t.es_original}"
+              data-set-video-id="${t.setVideoId || ''}"
+              data-video-id="${t.id || t.videoId || ''}"
+              data-playlist-id="${t.playlistId || ''}"
+              data-title="${escapeHtml(t.titulo)}"
+              title="${t.es_original ? 'Primera copia (original)' : 'Marcar para eliminar esta copia'}">
+            <span>${t._origIdx}</span>
+          </div>
+        </td>
+        <td>
+          <div class="fw-semibold text-light">${escapeHtml(t.titulo)}</div>
+          <div class="d-flex align-items-center gap-1 mt-1 flex-wrap">
+            ${badgeCopy}
+            ${badgeGroup}
+          </div>
+        </td>
+        <td class="text-secondary">${escapeHtml((t.artistas || []).join(", "))}</td>
+        <td class="text-end">
+          <div class="d-flex align-items-center justify-content-end gap-1 flex-wrap">
+            ${t.ytm_url ? `<a href="${escapeHtml(t.ytm_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-danger rounded-pill px-2 py-1" title="Escuchar en YouTube Music"><i class="fa-brands fa-youtube"></i></a>` : ''}
+            <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-2 py-1 btn-delete-single-dup" title="Eliminar solo esta copia de YouTube Music"
+              data-set-video-id="${t.setVideoId || ''}"
+              data-video-id="${t.id || t.videoId || ''}"
+              data-playlist-id="${t.playlistId || ''}"
+              data-title="${escapeHtml(t.titulo)}">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+        </td>
+      `;
+    } else if (currentPlanFilter === "ytm_only") {
       const artStr = (t.artistas || []).join(", ");
       const copyText = `${t.titulo} - ${artStr}`;
       tr.innerHTML = `
-        <td class="text-secondary small">${i + 1}</td>
+        <td class="text-secondary small">${t._origIdx}</td>
         <td class="fw-semibold text-light">${escapeHtml(t.titulo)}</td>
         <td class="text-secondary">${escapeHtml(artStr)}</td>
         <td class="text-end">
@@ -322,7 +488,7 @@ function renderPlanTracks() {
         : '<span class="badge bg-secondary bg-opacity-25 text-secondary border border-secondary border-opacity-50 px-2 py-1"><i class="fa-solid fa-check me-1"></i>Ya en YTM</span>';
 
       tr.innerHTML = `
-        <td class="text-secondary small">${i + 1}</td>
+        <td class="text-secondary small">${t._origIdx}</td>
         <td class="fw-semibold text-light">${escapeHtml(t.titulo)}</td>
         <td class="text-secondary">${escapeHtml((t.artistas || []).join(", "))}</td>
         <td class="text-end">${badgeHtml}</td>
@@ -332,14 +498,40 @@ function renderPlanTracks() {
     planTracksBody.appendChild(tr);
   });
 
-  if (list.length > 150) {
+  // Mostrar mensaje y botón si la lista supera 150 canciones
+  if (items.length > 150) {
     const trMore = document.createElement("tr");
-    trMore.innerHTML = `
-      <td colspan="4" class="text-center text-secondary small py-2">
-        ... y ${list.length - 150} canciones más.
-      </td>
-    `;
+    if (!showAllTracks) {
+      trMore.innerHTML = `
+        <td colspan="4" class="text-center py-3 bg-black bg-opacity-25">
+          <div class="text-secondary small mb-2">Mostrando 150 de <strong>${items.length}</strong> canciones (${items.length - 150} más sin mostrar)</div>
+          <button type="button" id="btn-show-all-tracks" class="btn btn-sm btn-outline-light rounded-pill px-4 py-1 fw-semibold shadow-sm">
+            <i class="fa-solid fa-eye me-1 text-primary"></i> Mostrar todas las ${items.length} canciones
+          </button>
+        </td>
+      `;
+    } else {
+      trMore.innerHTML = `
+        <td colspan="4" class="text-center py-3 bg-black bg-opacity-25">
+          <div class="text-secondary small mb-2">Mostrando la totalidad de las <strong>${items.length}</strong> canciones</div>
+          <button type="button" id="btn-collapse-tracks" class="btn btn-sm btn-outline-secondary rounded-pill px-4 py-1">
+            <i class="fa-solid fa-eye-slash me-1"></i> Mostrar solo las primeras 150
+          </button>
+        </td>
+      `;
+    }
     planTracksBody.appendChild(trMore);
+  }
+
+  updateDuplicateSelectedCount();
+}
+
+function updateDuplicateSelectedCount() {
+  const checked = document.querySelectorAll(".dup-checkbox:checked");
+  const count = checked.length;
+  if (dupSelectedCount) dupSelectedCount.textContent = count;
+  if (btnDeleteSelectedDuplicates) {
+    btnDeleteSelectedDuplicates.disabled = count === 0;
   }
 }
 
@@ -364,6 +556,139 @@ if (btnRefreshPlan) {
     fetchPlanTransfer();
   });
 }
+
+// Checkbox selection & actions for Duplicates
+planTracksBody.addEventListener("change", (e) => {
+  if (e.target.classList.contains("dup-checkbox")) {
+    updateDuplicateSelectedCount();
+  }
+});
+
+if (btnSelectAllDuplicates) {
+  btnSelectAllDuplicates.addEventListener("click", () => {
+    document.querySelectorAll(".dup-checkbox").forEach((cb) => {
+      cb.checked = (cb.dataset.isCopy === "true");
+    });
+    updateDuplicateSelectedCount();
+  });
+}
+
+if (btnDeselectDuplicates) {
+  btnDeselectDuplicates.addEventListener("click", () => {
+    document.querySelectorAll(".dup-checkbox").forEach((cb) => {
+      cb.checked = false;
+    });
+    updateDuplicateSelectedCount();
+  });
+}
+
+if (btnDeleteSelectedDuplicates) {
+  btnDeleteSelectedDuplicates.addEventListener("click", async () => {
+    const checked = Array.from(document.querySelectorAll(".dup-checkbox:checked"));
+    if (!checked.length) return;
+
+    const tracksToDelete = checked.map((cb) => ({
+      playlistId: cb.dataset.playlistId,
+      videoId: cb.dataset.videoId,
+      setVideoId: cb.dataset.setVideoId,
+      titulo: cb.dataset.title,
+    }));
+
+    if (!confirm(`¿Estás seguro de que deseas eliminar permanentemente ${tracksToDelete.length} canción(es) seleccionada(s) de tu playlist de YouTube Music?`)) {
+      return;
+    }
+
+    btnDeleteSelectedDuplicates.disabled = true;
+    showToast(`Eliminando ${tracksToDelete.length} canción(es) de YouTube Music...`, "info");
+
+    try {
+      const resp = await fetch("/api/delete-ytm-tracks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tracks: tracksToDelete }),
+      });
+      const data = await resp.json();
+      if (!data.success) {
+        showToast(data.error || "Error al eliminar canciones.", "danger");
+        btnDeleteSelectedDuplicates.disabled = false;
+        return;
+      }
+
+      showToast(data.message || `Se han eliminado ${data.total_eliminadas} canciones.`, "success");
+      fetchPlanTransfer();
+    } catch (err) {
+      showToast("Error de red al eliminar canciones.", "danger");
+      btnDeleteSelectedDuplicates.disabled = false;
+    }
+  });
+}
+
+// Eliminar copia individual mediante clic en icono de papelera
+planTracksBody.addEventListener("click", async (e) => {
+  const delBtn = e.target.closest(".btn-delete-single-dup");
+  if (!delBtn) return;
+
+  const trackToDelete = {
+    playlistId: delBtn.dataset.playlistId,
+    videoId: delBtn.dataset.videoId,
+    setVideoId: delBtn.dataset.setVideoId,
+    titulo: delBtn.dataset.title,
+  };
+
+  if (!confirm(`¿Eliminar la copia de "${trackToDelete.titulo}" de YouTube Music?`)) {
+    return;
+  }
+
+  showToast(`Eliminando "${trackToDelete.titulo}"...`, "info");
+  try {
+    const resp = await fetch("/api/delete-ytm-tracks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tracks: [trackToDelete] }),
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      showToast(data.error || "Error al eliminar canción.", "danger");
+      return;
+    }
+
+    showToast(`"${trackToDelete.titulo}" eliminada correctamente.`, "success");
+    fetchPlanTransfer();
+  } catch (err) {
+    showToast("Error de red al eliminar canción.", "danger");
+  }
+});
+
+// Listener para "Mostrar todas las canciones" y "Mostrar solo las 150"
+planTracksBody.addEventListener("click", (e) => {
+  if (e.target.closest("#btn-show-all-tracks")) {
+    showAllTracks = true;
+    renderPlanTracks();
+  } else if (e.target.closest("#btn-collapse-tracks")) {
+    showAllTracks = false;
+    renderPlanTracks();
+  }
+});
+
+// Listener para ordenar al hacer clic en las cabeceras <th>
+document.querySelectorAll(".sortable-th").forEach((th) => {
+  th.addEventListener("click", () => {
+    const col = th.dataset.col;
+    if (currentSortCol === col) {
+      if (currentSortDir === "asc") {
+        currentSortDir = "desc";
+      } else {
+        currentSortCol = null;
+        currentSortDir = "asc";
+      }
+    } else {
+      currentSortCol = col;
+      currentSortDir = "asc";
+    }
+    updateSortIcons();
+    renderPlanTracks();
+  });
+});
 
 document.addEventListener("click", (e) => {
   const btn = e.target.closest(".plan-filter-btn");

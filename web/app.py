@@ -25,6 +25,7 @@ from core.ytm_engine import (
     comprobar_token_oauth,
     planificar_transferencia,
     obtener_cliente_ytm,
+    eliminar_canciones_ytm,
 )
 from core.job_runner import (
     crear_tarea,
@@ -409,6 +410,37 @@ def api_plan_transfer():
             "success": False,
             "auth_ok": True,
             "error": f"Error al analizar YouTube Music: {str(e)}",
+        }), 500
+
+
+@app.route("/api/delete-ytm-tracks", methods=["POST"])
+def api_delete_ytm_tracks():
+    """Elimina canciones específicas de YouTube Music (para resolver duplicados)."""
+    data = request.get_json() or {}
+    tracks = data.get("tracks", [])
+    if not tracks:
+        return jsonify({"success": False, "error": "No se proporcionaron canciones para eliminar."}), 400
+
+    ruta_auth = encontrar_archivo_auth(DATA_DIR)
+    if not ruta_auth:
+        return jsonify({
+            "success": False,
+            "error": "YouTube Music no está autenticado. Conéctalo desde 'Configurar YTM'.",
+        }), 400
+
+    try:
+        yt = obtener_cliente_ytm(ruta_auth)
+        resultado = eliminar_canciones_ytm(yt, tracks)
+        return jsonify({
+            "success": resultado["success"],
+            "total_eliminadas": resultado["total_eliminadas"],
+            "errores": resultado["errores"],
+            "message": f"Se han eliminado {resultado['total_eliminadas']} canción(es) de YouTube Music.",
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Error al eliminar canciones de YouTube Music: {str(e)}",
         }), 500
 
 

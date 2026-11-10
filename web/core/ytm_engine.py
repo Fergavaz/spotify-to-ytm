@@ -205,10 +205,91 @@ def obtener_canciones_ytm(yt: YTMusic, playlists: list[dict], log_cb: Optional[C
         for t in datos.get("tracks", []):
             canciones.append({
                 "id": t.get("videoId"),
+                "setVideoId": t.get("setVideoId"),
+                "playlistId": pl["playlistId"],
+                "playlistTitle": pl.get("title", ""),
                 "titulo": t.get("title", ""),
                 "artistas": [a["name"] for a in (t.get("artists") or []) if isinstance(a, dict)],
             })
     return canciones
+
+
+def detectar_duplicados_ytm(canciones_ytm: list[dict]) -> list[dict]:
+    """
+    Detecta canciones duplicadas dentro de las listas existentes de YouTube Music
+    (por videoId idéntico o por coincidencia difusa de título y artistas).
+    Devuelve las canciones que forman parte de algún grupo duplicado.
+    """
+    grupos: list[list[dict]] = []
+    asignados = set()
+
+    for i, t1 in enumerate(canciones_ytm):
+        if i in asignados:
+            continue
+        grupo = [t1]
+        for j in range(i + 1, len(canciones_ytm)):
+            if j in asignados:
+                continue
+            t2 = canciones_ytm[j]
+            es_mismo_id = bool(t1.get("id") and t1.get("id") == t2.get("id"))
+            if es_mismo_id or canciones_coinciden(t1, t2):
+                grupo.append(t2)
+                asignados.add(j)
+
+        if len(grupo) > 1:
+            asignados.add(i)
+            grupos.append(grupo)
+
+    resultado = []
+    for g_idx, grupo in enumerate(grupos, start=1):
+        for copia_idx, t in enumerate(grupo, start=1):
+            item = dict(t)
+            item["grupo_id"] = f"dup_{g_idx}"
+            item["grupo_num"] = g_idx
+            item["copia_num"] = copia_idx
+            item["total_copias"] = len(grupo)
+            item["es_original"] = (copia_idx == 1)
+            item["ytm_url"] = f"https://music.youtube.com/watch?v={t.get('id')}" if t.get("id") else None
+            resultado.append(item)
+
+    return resultado
+
+
+def eliminar_canciones_ytm(yt: YTMusic, canciones_a_eliminar: list[dict]) -> dict:
+    """
+    Elimina canciones específicas de playlists de YouTube Music utilizando videoId y setVideoId.
+    Agrupa por playlistId para realizar llamadas eficientes en lote.
+    """
+    por_playlist: dict[str, list[dict]] = {}
+    for t in canciones_a_eliminar:
+        pl_id = t.get("playlistId")
+        vid = t.get("id") or t.get("videoId")
+        svid = t.get("setVideoId")
+        if not pl_id or not vid or not svid:
+            continue
+        por_playlist.setdefault(pl_id, []).append({
+            "videoId": vid,
+            "setVideoId": svid,
+        })
+
+    total_eliminadas = 0
+    errores = []
+
+    for pl_id, items in por_playlist.items():
+        try:
+            # yt.remove_playlist_items(pl_id, videos) en lotes de 50
+            for i in range(0, len(items), 50):
+                lote = items[i:i + 50]
+                yt.remove_playlist_items(pl_id, lote)
+                total_eliminadas += len(lote)
+        except Exception as e:
+            errores.append(f"Error al eliminar en playlist {pl_id}: {str(e)}")
+
+    return {
+        "success": total_eliminadas > 0 or not errores,
+        "total_eliminadas": total_eliminadas,
+        "errores": errores,
+    }
 
 
 def buscar_en_ytm(yt: YTMusic, cancion: dict) -> Optional[str]:
@@ -306,6 +387,9 @@ def planificar_transferencia(
                     "ytm_url": f"https://music.youtube.com/watch?v={t_ytm['id']}" if t_ytm.get("id") else None,
                 })
 
+        # Detectar canciones duplicadas en la lista de YouTube Music
+        duplicados_ytm = detectar_duplicados_ytm(canciones_ytm)
+
         nombres_existentes = [p["title"] for p in listas_existentes]
 
         partes_msg = []
@@ -324,6 +408,12 @@ def planificar_transferencia(
                 f"Además, se han detectado {len(solo_en_ytm)} canciones en YouTube Music que no están en la lista original de Spotify."
             )
 
+        if duplicados_ytm:
+            num_grupos = len(set(t["grupo_id"] for t in duplicados_ytm))
+            partes_msg.append(
+                f"Se han detectado {len(duplicados_ytm)} canciones duplicadas ({num_grupos} grupos de repetición) en YouTube Music."
+            )
+
         return {
             "existe_en_ytm": True,
             "tipo_accion": "sincronizar",
@@ -333,9 +423,11 @@ def planificar_transferencia(
             "total_a_anadir": len(canciones_a_anadir),
             "total_ya_existentes": len(canciones_ya_en_ytm),
             "total_solo_en_ytm": len(solo_en_ytm),
+            "total_duplicados_ytm": len(duplicados_ytm),
             "canciones_a_anadir": canciones_a_anadir,
             "canciones_ya_existentes": canciones_ya_en_ytm,
             "canciones_solo_en_ytm": solo_en_ytm,
+            "canciones_duplicadas_ytm": duplicados_ytm,
             "mensaje": " ".join(partes_msg),
         }
     else:
@@ -359,9 +451,11 @@ def planificar_transferencia(
             "total_a_anadir": len(canciones_spotify),
             "total_ya_existentes": 0,
             "total_solo_en_ytm": 0,
+            "total_duplicados_ytm": 0,
             "canciones_a_anadir": canciones_spotify,
             "canciones_ya_existentes": [],
             "canciones_solo_en_ytm": [],
+            "canciones_duplicadas_ytm": [],
             "mensaje": msg,
         }
 

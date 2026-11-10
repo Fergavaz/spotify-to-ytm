@@ -259,28 +259,34 @@
 
           <!-- Plan Stats Cards -->
           <div id="plan-stats-container" class="row g-2 mb-3 d-none">
-            <div class="col-6 col-md-3">
+            <div class="col-6 col-md">
               <div class="bg-secondary bg-opacity-10 border border-secondary border-opacity-25 rounded-3 p-2 text-center h-100 d-flex flex-column justify-content-center">
                 <div class="text-secondary small">Acción en YTM</div>
                 <div class="fw-bold fs-6 mt-1" id="plan-badge-action">--</div>
               </div>
             </div>
-            <div class="col-6 col-md-3">
+            <div class="col-6 col-md">
               <div class="bg-success bg-opacity-10 border border-success border-opacity-25 rounded-3 p-2 text-center h-100 d-flex flex-column justify-content-center">
                 <div class="text-success small fw-semibold">Nuevas para YTM</div>
                 <div class="fw-bold fs-5 text-success" id="plan-stat-to-add">0</div>
               </div>
             </div>
-            <div class="col-6 col-md-3">
+            <div class="col-6 col-md">
               <div class="bg-info bg-opacity-10 border border-info border-opacity-25 rounded-3 p-2 text-center h-100 d-flex flex-column justify-content-center">
                 <div class="text-info small fw-semibold">En ambas listas</div>
                 <div class="fw-bold fs-5 text-info" id="plan-stat-already">0</div>
               </div>
             </div>
-            <div class="col-6 col-md-3">
+            <div class="col-6 col-md">
               <div class="bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded-3 p-2 text-center h-100 d-flex flex-column justify-content-center">
-                <div class="text-warning small fw-semibold">Solo en YTM (no en Spotify)</div>
+                <div class="text-warning small fw-semibold">Solo en YTM</div>
                 <div class="fw-bold fs-5 text-warning" id="plan-stat-ytm-only">0</div>
+              </div>
+            </div>
+            <div class="col-12 col-md" id="plan-stat-duplicates-col">
+              <div class="bg-danger bg-opacity-10 border border-danger border-opacity-25 rounded-3 p-2 text-center h-100 d-flex flex-column justify-content-center">
+                <div class="text-danger small fw-semibold">Duplicadas en YTM</div>
+                <div class="fw-bold fs-5 text-danger" id="plan-stat-duplicates">0</div>
               </div>
             </div>
           </div>
@@ -306,6 +312,9 @@
                     <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3 py-1 fw-semibold plan-filter-btn" data-filter="ytm_only">
                       ⭐ Solo en YTM (<span id="pill-count-ytm-only">0</span>)
                     </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 py-1 fw-semibold plan-filter-btn" id="pill-btn-duplicates" data-filter="duplicates">
+                      ⚠️ Duplicadas en YTM (<span id="pill-count-duplicates">0</span>)
+                    </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold plan-filter-btn" data-filter="all">
                       Todas (<span id="pill-count-all">0</span>)
                     </button>
@@ -320,6 +329,19 @@
                       <span>Descargar .txt</span>
                     </button>
                   </div>
+                  <div id="duplicates-actions" class="d-none d-flex gap-2 flex-wrap align-items-center">
+                    <button type="button" id="btn-select-all-duplicates" class="btn btn-sm btn-outline-light rounded-pill px-3 py-1" title="Marcar las copias repetidas para eliminar (conservando la primera)">
+                      <i class="fa-regular fa-square-check me-1"></i>
+                      <span>Marcar copias sobrantes</span>
+                    </button>
+                    <button type="button" id="btn-deselect-duplicates" class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1" title="Desmarcar todas">
+                      <i class="fa-regular fa-square"></i>
+                    </button>
+                    <button type="button" id="btn-delete-selected-duplicates" class="btn btn-sm btn-danger rounded-pill px-3 py-1 fw-bold d-flex align-items-center gap-1" disabled>
+                      <i class="fa-solid fa-trash-can"></i>
+                      <span>Eliminar seleccionadas (<span id="dup-selected-count">0</span>)</span>
+                    </button>
+                  </div>
                 </div>
                 <div id="banner-ytm-only-info" class="p-3 bg-warning bg-opacity-10 border-bottom border-warning border-opacity-25 d-none">
                   <div class="d-flex align-items-start gap-2">
@@ -332,14 +354,33 @@
                     </div>
                   </div>
                 </div>
+                <div id="banner-duplicates-info" class="p-3 bg-danger bg-opacity-10 border-bottom border-danger border-opacity-25 d-none">
+                  <div class="d-flex align-items-start gap-2">
+                    <i class="fa-solid fa-triangle-exclamation text-danger fs-5 mt-1"></i>
+                    <div>
+                      <div class="fw-semibold text-light small">Canciones repetidas detectadas en YouTube Music:</div>
+                      <div class="text-secondary small">
+                        Estas canciones están dos o más veces en tu playlist de YouTube Music. Puedes seleccionar las copias que desees borrar (o usar el botón <strong>«Marcar copias sobrantes»</strong> para conservar automáticamente solo la primera de cada grupo) y pulsar <strong>«Eliminar seleccionadas»</strong>.
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <div class="accordion-body p-0 table-responsive max-h-300">
                   <table class="table table-dark table-striped table-hover mb-0 align-middle small">
                     <thead>
-                      <tr class="text-secondary">
-                        <th style="width: 45px;">#</th>
-                        <th>Título</th>
-                        <th>Artista(s)</th>
-                        <th style="width: 190px;" class="text-end">Acciones</th>
+                      <tr class="text-secondary user-select-none">
+                        <th class="sortable-th" data-col="index" style="width: 70px;" role="button" title="Ordenar por número">
+                          <span>#</span> <i class="fa-solid fa-sort ms-1 text-muted sort-icon" data-col="index"></i>
+                        </th>
+                        <th class="sortable-th" data-col="title" role="button" title="Ordenar por título">
+                          <span>Título</span> <i class="fa-solid fa-sort ms-1 text-muted sort-icon" data-col="title"></i>
+                        </th>
+                        <th class="sortable-th" data-col="artist" role="button" title="Ordenar por artista(s)">
+                          <span>Artista(s)</span> <i class="fa-solid fa-sort ms-1 text-muted sort-icon" data-col="artist"></i>
+                        </th>
+                        <th class="sortable-th text-end" data-col="status" style="min-width: 180px;" role="button" title="Ordenar por estado / acciones">
+                          <span id="th-status-label">Estado / Acciones</span> <i class="fa-solid fa-sort ms-1 text-muted sort-icon" data-col="status"></i>
+                        </th>
                       </tr>
                     </thead>
                     <tbody id="plan-tracks-body">

@@ -116,3 +116,36 @@ body {
   background-color: var(--spotify-green);
   border-color: var(--spotify-green);
 }
+
+/* Sortable Table Headers */
+.sortable-th {
+  cursor: pointer;
+  transition: color 0.15s ease-in-out;
+}
+
+.sortable-th:hover {
+  color: #fff !important;
+}
+
+.sortable-th .sort-icon {
+  font-size: 0.8rem;
+  vertical-align: middle;
+}
+
+/* Duplicates table row */
+tr.tr-duplicate-copy {
+  background-color: rgba(239, 68, 68, 0.05);
+}
+
+tr.tr-duplicate-copy:hover {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+}
+
+tr.tr-duplicate-original {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+tr.tr-duplicate-original:hover {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}
+
