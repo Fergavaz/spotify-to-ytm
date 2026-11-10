@@ -326,12 +326,13 @@ function updateSortIcons() {
   document.querySelectorAll(".sort-icon").forEach((icon) => {
     const col = icon.dataset.col;
     if (col === currentSortCol) {
-      icon.className =
-        currentSortDir === "asc"
-          ? "fa-solid fa-sort-up ms-1 text-primary sort-icon"
-          : "fa-solid fa-sort-down ms-1 text-primary sort-icon";
+      if (currentSortDir === "asc") {
+        icon.className = "fa-solid fa-arrow-up ms-1 text-success sort-icon";
+      } else {
+        icon.className = "fa-solid fa-arrow-down ms-1 text-warning sort-icon";
+      }
     } else {
-      icon.className = "fa-solid fa-sort ms-1 text-muted sort-icon";
+      icon.className = "fa-solid fa-sort ms-1 text-secondary opacity-50 sort-icon";
     }
   });
 }
@@ -670,32 +671,35 @@ planTracksBody.addEventListener("click", (e) => {
   }
 });
 
-// Listener para ordenar al hacer clic en las cabeceras <th>
-document.querySelectorAll(".sortable-th").forEach((th) => {
-  th.addEventListener("click", () => {
-    const col = th.dataset.col;
-    if (currentSortCol === col) {
-      if (currentSortDir === "asc") {
-        currentSortDir = "desc";
+// Listener para ordenar al hacer clic en las cabeceras <th> (delegado globalmente en document)
+document.addEventListener("click", (e) => {
+  const sortTh = e.target.closest(".sortable-th");
+  if (sortTh) {
+    const col = sortTh.dataset.col;
+    if (col) {
+      if (currentSortCol === col) {
+        if (currentSortDir === "asc") {
+          currentSortDir = "desc";
+        } else {
+          currentSortCol = null;
+          currentSortDir = "asc";
+        }
       } else {
-        currentSortCol = null;
+        currentSortCol = col;
         currentSortDir = "asc";
       }
-    } else {
-      currentSortCol = col;
-      currentSortDir = "asc";
+      updateSortIcons();
+      renderPlanTracks();
     }
-    updateSortIcons();
-    renderPlanTracks();
-  });
-});
+    return;
+  }
 
-document.addEventListener("click", (e) => {
   const btn = e.target.closest(".plan-filter-btn");
   if (btn) {
     currentPlanFilter = btn.dataset.filter;
     updatePlanFilterButtons();
     renderPlanTracks();
+    return;
   }
 
   const copyBtn = e.target.closest(".copy-track-btn");
