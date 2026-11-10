@@ -525,37 +525,106 @@ def leer_spotify_csv(ruta_csv: str) -> list[dict]:
     return pistas
 
 
+PATHFINDER_HASH = "a65e12194ed5fc443a1cdebed5fabe33ca5b07b987185d63c72483867ad13cb4"
+HEADERS_SPOTIFY = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+}
+
+_TOKEN_CACHE_CLI: dict[str, any] = {"token": None, "expires_at": 0}
+
+
+def _obtener_token_spotify_cli(sample_id: str = "37i9dQZF1DXcBWIGoYBM5M") -> str:
+    ahora = time.time()
+    if _TOKEN_CACHE_CLI["token"] and ahora < _TOKEN_CACHE_CLI["expires_at"] - 60:
+        return _TOKEN_CACHE_CLI["token"]
+
+    embed_url = f"https://open.spotify.com/embed/playlist/{sample_id}"
+    req = urllib.request.Request(embed_url, headers=HEADERS_SPOTIFY)
+    with urllib.request.urlopen(req, timeout=12) as resp:
+        html = resp.read().decode("utf-8", errors="ignore")
+
+    m = re.search(r'<script id=[\x27\x22]__NEXT_DATA__[\x27\x22][^>]*>(.*?)</script>', html)
+    if not m:
+        raise RuntimeError("No se pudo obtener el bloque __NEXT_DATA__ de Spotify embed.")
+
+    data = json.loads(m.group(1))
+    session = data.get("props", {}).get("pageProps", {}).get("state", {}).get("settings", {}).get("session", {})
+    token = session.get("accessToken")
+    expires_ms = session.get("accessTokenExpirationTimestampMs", 0)
+
+    if not token:
+        raise RuntimeError("No se encontró accessToken en la sesión embed de Spotify.")
+
+    _TOKEN_CACHE_CLI["token"] = token
+    _TOKEN_CACHE_CLI["expires_at"] = (expires_ms / 1000.0) if expires_ms else ahora + 3600
+    return token
+
+
 def obtener_canciones_por_url(url_o_id: str) -> tuple[str, list[dict]]:
     """
     Extrae el nombre y todas las canciones de una playlist de Spotify
     a partir de su enlace (ej: https://open.spotify.com/playlist/...) o ID.
     NO requiere cuenta Premium ni credenciales de API.
     """
-    if not HAS_SCRAPER:
-        print("   ❌ La librería 'spotifyscraper' no está instalada.")
-        print("      Instálala con: pip install spotifyscraper")
-        return "", []
+    t = url_o_id.strip()
+    m = re.search(r"playlist[:/]([a-zA-Z0-9]{22})", t)
+    pid = m.group(1) if m else (t if len(t) == 22 and t.isalnum() else t.split("?")[0].strip("/"))
+    print(f"\n🔍 Extrayendo canciones directamente de Spotify ({url_o_id})...")
 
-    url_limpia = url_o_id.strip().split("?")[0]
-    print(f"\n🔍 Extrayendo canciones directamente de Spotify ({url_limpia})...")
+    # Estrategia 1: Pathfinder nativo con token anónimo
     try:
-        with SpotifyClient() as client:
-            # max_tracks=None asegura que se descarguen TODAS las canciones sin el tope de 100
-            playlist = client.get_playlist(url_limpia, max_tracks=None)
-            nombre = playlist.name
-            canciones = []
-            for item in getattr(playlist, "tracks", []):
-                t = getattr(item, "track", None)
-                if t and getattr(t, "name", None):
-                    artistas = [a.name for a in getattr(t, "artists", []) if getattr(a, "name", None)]
-                    canciones.append({
-                        "titulo": t.name,
-                        "artistas": artistas,
-                    })
-            return nombre, canciones
-    except Exception as e:
-        print(f"   ❌ Error al extraer la playlist: {e}")
-        return "", []
+        token = _obtener_token_spotify_cli(pid)
+        offset = 0
+        limit = 100
+        canciones = []
+        nombre_playlist = "Playlist Spotify"
+        while True:
+            vars_payload = {"uri": f"spotify:playlist:{pid}", "offset": offset, "limit": limit, "enableWatchFeedEntrypoint": False}
+            ext_payload = {"persistedQuery": {"version": 1, "sha256Hash": PATHFINDER_HASH}}
+            url = f"https://api-partner.spotify.com/pathfinder/v1/query?operationName=fetchPlaylist&variables={urllib.parse.quote(json.dumps(vars_payload))}&extensions={urllib.parse.quote(json.dumps(ext_payload))}"
+            req = urllib.request.Request(url, headers={**HEADERS_SPOTIFY, "Authorization": f"Bearer {token}", "app-platform": "WebPlayer"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            pl_data = data.get("data", {}).get("playlistV2", {})
+            if pl_data.get("name"):
+                nombre_playlist = pl_data["name"]
+            content = pl_data.get("content", {})
+            total_count = content.get("totalCount", 0)
+            items = content.get("items", [])
+            if not items:
+                break
+            for item in items:
+                track = item.get("itemV2", {}).get("data", {})
+                if track.get("__typename") == "Track" and track.get("name"):
+                    arts = [a.get("profile", {}).get("name") for a in track.get("artists", {}).get("items", []) if a.get("profile", {}).get("name")]
+                    canciones.append({"titulo": track["name"], "artistas": arts})
+            offset += len(items)
+            if total_count and offset >= total_count:
+                break
+        if canciones:
+            return nombre_playlist, canciones
+    except Exception:
+        pass
+
+    # Estrategia 2: Fallback con spotifyscraper si está disponible
+    if HAS_SCRAPER:
+        try:
+            with SpotifyClient() as client:
+                playlist = client.get_playlist(url_o_id.strip().split("?")[0], max_tracks=None)
+                nombre = playlist.name
+                canciones = []
+                for item in getattr(playlist, "tracks", []):
+                    trk = getattr(item, "track", None)
+                    if trk and getattr(trk, "name", None):
+                        artistas = [a.name for a in getattr(trk, "artists", []) if getattr(a, "name", None)]
+                        canciones.append({"titulo": trk.name, "artistas": artistas})
+                return nombre, canciones
+        except Exception:
+            pass
+
+    return "", []
 
 
 def obtener_playlists_usuario_publicas(usuario: str) -> list[dict]:
@@ -621,26 +690,29 @@ def obtener_playlists_usuario_publicas(usuario: str) -> list[dict]:
     except Exception:
         pass
 
-    # Si encontramos las listas directamente en su perfil, obtenemos sus canciones completas
-    if encontradas and HAS_SCRAPER:
-        playlists_detalles = []
+    # Si encontramos listas, enriquecemos el conteo real de canciones con Pathfinder
+    if encontradas:
         try:
-            with SpotifyClient() as client:
-                for item in encontradas[:30]:
-                    try:
-                        # max_tracks=None para obtener el conteo total real de canciones
-                        pl = client.get_playlist(item["url"], max_tracks=None)
-                        playlists_detalles.append({
-                            "id": item["id"],
-                            "nombre": pl.name,
-                            "total": len(getattr(pl, "tracks", [])),
-                            "url": item["url"],
-                        })
-                    except Exception:
-                        playlists_detalles.append(item)
-            return playlists_detalles
+            token = _obtener_token_spotify_cli(encontradas[0]["id"])
+            for item in encontradas[:30]:
+                try:
+                    pid = item["id"]
+                    vars_payload = {"uri": f"spotify:playlist:{pid}", "offset": 0, "limit": 1, "enableWatchFeedEntrypoint": False}
+                    ext_payload = {"persistedQuery": {"version": 1, "sha256Hash": PATHFINDER_HASH}}
+                    url = f"https://api-partner.spotify.com/pathfinder/v1/query?operationName=fetchPlaylist&variables={urllib.parse.quote(json.dumps(vars_payload))}&extensions={urllib.parse.quote(json.dumps(ext_payload))}"
+                    req_pf = urllib.request.Request(url, headers={**HEADERS_SPOTIFY, "Authorization": f"Bearer {token}", "app-platform": "WebPlayer"})
+                    with urllib.request.urlopen(req_pf, timeout=5) as r:
+                        res = json.loads(r.read().decode("utf-8"))
+                        pl = res.get("data", {}).get("playlistV2", {})
+                        if pl.get("name"):
+                            item["nombre"] = pl["name"]
+                        tot = pl.get("content", {}).get("totalCount")
+                        if tot is not None:
+                            item["total"] = tot
+                except Exception:
+                    pass
         except Exception:
-            return encontradas
+            pass
 
     return encontradas
 
